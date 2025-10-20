@@ -1,0 +1,51 @@
+services:
+  trend-agent:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: consumer-trend-agent:latest
+    container_name: trend-agent
+    volumes:
+      - trend-data:/app/backend/data
+    ports:
+      - ${OPEN_WEBUI_PORT-3000}:8080
+    environment:
+      # Required: LLM Configuration (Cloud-Neutral)
+      - LLM_PROVIDER=${LLM_PROVIDER:-azure_openai}
+      - OPENAI_API_TYPE=${OPENAI_API_TYPE:-azure}
+      - OPENAI_API_BASE=${OPENAI_API_BASE:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENAI_API_VERSION=${OPENAI_API_VERSION:-2024-02-15-preview}
+      - OPENAI_DEPLOYMENT_NAME=${OPENAI_DEPLOYMENT_NAME:-gpt-4}
+      - OPENAI_MODEL_NAME=${OPENAI_MODEL_NAME:-gpt-4}
+
+      # Optional: Anthropic
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - ANTHROPIC_MODEL_NAME=${ANTHROPIC_MODEL_NAME:-claude-3-5-sonnet-20241022}
+
+      # Optional: Google
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
+      - GOOGLE_MODEL_NAME=${GOOGLE_MODEL_NAME:-gemini-1.5-pro}
+
+      # Optional: Ollama
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://localhost:11434}
+      - OLLAMA_MODEL_NAME=${OLLAMA_MODEL_NAME:-llama3.1}
+
+      # Optional: News APIs
+      - NEWS_API_KEY=${NEWS_API_KEY:-}
+      - NAVER_CLIENT_ID=${NAVER_CLIENT_ID:-}
+      - NAVER_CLIENT_SECRET=${NAVER_CLIENT_SECRET:-}
+
+      # Optional: Web Search
+      - TAVILY_API_KEY=${TAVILY_API_KEY:-}
+
+      # Application Settings
+      - WEBUI_SECRET_KEY=${WEBUI_SECRET_KEY:-}
+      - SLEEP_TIME=${SLEEP_TIME:-0.05}
+      - DEFAULT_CUSTOM_MODEL_ID=${DEFAULT_CUSTOM_MODEL_ID:-}
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    restart: unless-stopped
+
+volumes:
+  trend-data:

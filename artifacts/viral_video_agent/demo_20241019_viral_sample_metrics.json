@@ -1,0 +1,42 @@
+{
+  "run_id": "demo_20241019_viral_sample",
+  "timestamp": "20241019_150000",
+  "metrics": {
+    "spike_detected": 10,
+    "avg_growth_rate": 245.3,
+    "coverage": 0.85,
+    "actionability": 1.0
+  },
+  "item_count": 25,
+  "platforms": ["youtube", "tiktok"],
+  "platform_distribution": {
+    "youtube": 15,
+    "tiktok": 10
+  },
+  "cluster_analysis": {
+    "total_clusters": 3,
+    "clusters": [
+      {
+        "name": "공식 콘텐츠",
+        "video_count": 8,
+        "total_views": 8500000
+      },
+      {
+        "name": "챌린지/커버",
+        "video_count": 10,
+        "total_views": 12300000
+      },
+      {
+        "name": "리액션/분석",
+        "video_count": 7,
+        "total_views": 6800000
+      }
+    ]
+  },
+  "spike_patterns": {
+    "short_burst": 7,
+    "gradual_growth": 3
+  },
+  "execution_time_ms": 12850,
+  "data_source": "sample"
+}

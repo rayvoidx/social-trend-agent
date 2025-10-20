@@ -1,0 +1,27 @@
+{
+  "run_id": "demo_20241019_sample",
+  "timestamp": "20241019_143000",
+  "metrics": {
+    "coverage": 0.9,
+    "factuality": 1.0,
+    "actionability": 1.0
+  },
+  "item_count": 18,
+  "sentiment_distribution": {
+    "positive": 12,
+    "neutral": 5,
+    "negative": 1,
+    "positive_pct": 66.7,
+    "neutral_pct": 27.8,
+    "negative_pct": 5.6
+  },
+  "top_keywords": [
+    {"keyword": "전기차", "count": 45},
+    {"keyword": "배터리", "count": 23},
+    {"keyword": "충전", "count": 18},
+    {"keyword": "테슬라", "count": 15},
+    {"keyword": "환경", "count": 12}
+  ],
+  "execution_time_ms": 8542,
+  "data_source": "sample"
+}

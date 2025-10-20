@@ -1,0 +1,178 @@
+{
+  "name": "News Trend Daily Report",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 9 * * *"
+            }
+          ]
+        }
+      },
+      "name": "Daily Trigger (9 AM)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "command": "python scripts/run_agent.py --agent news_trend_agent --query \"{{ $json.query }}\" --window 24h --emit md,json --notify n8n"
+      },
+      "name": "Run News Trend Agent",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "news-report",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "name": "Webhook (Receive Report)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [650, 300],
+      "webhookId": "news-trend-webhook"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{ $json.metrics.coverage }}",
+              "operation": "larger",
+              "value2": 0.7
+            }
+          ]
+        }
+      },
+      "name": "Check Quality",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [850, 300]
+    },
+    {
+      "parameters": {
+        "channel": "#trend-alerts",
+        "text": "=🔍 *Daily News Trend Report* ({{ $now.format('YYYY-MM-DD') }})\n\n*Query*: {{ $json.query }}\n*Items Analyzed*: {{ $json.item_count }}\n*Sentiment*: 😊 {{ $json.sentiment.positive }}% | 😐 {{ $json.sentiment.neutral }}% | 😞 {{ $json.sentiment.negative }}%\n\n*Top Keywords*: {{ $json.keywords[0] }}, {{ $json.keywords[1] }}, {{ $json.keywords[2] }}\n\n*Summary*: {{ $json.summary }}\n\n[View Full Report]({{ $json.report_url }})",
+        "attachments": [],
+        "otherOptions": {}
+      },
+      "name": "Send to Slack",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 1,
+      "position": [1050, 250]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": "=YOUR_GOOGLE_SHEET_ID",
+        "sheetName": "Trend Reports",
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Date": "={{ $now.format('YYYY-MM-DD') }}",
+            "Query": "={{ $json.query }}",
+            "Items": "={{ $json.item_count }}",
+            "Positive %": "={{ $json.sentiment.positive }}",
+            "Neutral %": "={{ $json.sentiment.neutral }}",
+            "Negative %": "={{ $json.sentiment.negative }}",
+            "Top Keyword": "={{ $json.keywords[0] }}",
+            "Coverage": "={{ $json.metrics.coverage }}",
+            "Report URL": "={{ $json.report_url }}"
+          }
+        },
+        "options": {}
+      },
+      "name": "Log to Google Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 3,
+      "position": [1050, 350]
+    },
+    {
+      "parameters": {
+        "text": "=⚠️ *Low Quality Report Warning*\n\nCoverage: {{ $json.metrics.coverage }}\n\nPlease check API keys and data sources.",
+        "channel": "#alerts"
+      },
+      "name": "Alert Low Quality",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 1,
+      "position": [1050, 450]
+    }
+  ],
+  "connections": {
+    "Daily Trigger (9 AM)": {
+      "main": [
+        [
+          {
+            "node": "Run News Trend Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Run News Trend Agent": {
+      "main": [
+        [
+          {
+            "node": "Webhook (Receive Report)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook (Receive Report)": {
+      "main": [
+        [
+          {
+            "node": "Check Quality",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Quality": {
+      "main": [
+        [
+          {
+            "node": "Send to Slack",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Log to Google Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Alert Low Quality",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {},
+  "versionId": "1.0.0",
+  "meta": {
+    "instanceId": "your-n8n-instance-id"
+  },
+  "tags": [
+    "trend-analysis",
+    "news",
+    "automation"
+  ],
+  "description": "매일 오전 9시에 뉴스 트렌드를 분석하고 Slack으로 알림을 전송하며, Google Sheets에 로그를 저장하는 자동화 워크플로우"
+}
