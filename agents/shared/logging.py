@@ -1,5 +1,5 @@
 """
-Structured JSON logging for agents
+에이전트를 위한 구조화된 JSON 로깅
 """
 import json
 import logging
@@ -11,11 +11,11 @@ from pathlib import Path
 
 class JsonLineFormatter(logging.Formatter):
     """
-    Formatter that outputs JSON lines for easy parsing
+    손쉬운 파싱을 위한 JSON 라인 형식 포매터
     """
 
     def format(self, record: logging.LogRecord) -> str:
-        """Format log record as JSON line"""
+        """로그 레코드를 JSON 라인으로 포매팅"""
         log_data = {
             "timestamp": datetime.utcnow().isoformat() + "Z",
             "level": record.levelname,
@@ -23,7 +23,7 @@ class JsonLineFormatter(logging.Formatter):
             "message": record.getMessage(),
         }
 
-        # Add extra fields
+        # 추가 필드 포함
         if hasattr(record, "run_id"):
             log_data["run_id"] = record.run_id
 
@@ -36,11 +36,11 @@ class JsonLineFormatter(logging.Formatter):
         if hasattr(record, "duration_ms"):
             log_data["duration_ms"] = record.duration_ms
 
-        # Add exception info if present
+        # 예외 정보가 있으면 추가
         if record.exc_info:
             log_data["exception"] = self.formatException(record.exc_info)
 
-        # Add any custom extra fields
+        # 커스텀 필드 추가
         for key, value in record.__dict__.items():
             if key not in ["name", "msg", "args", "created", "filename", "funcName",
                           "levelname", "levelno", "lineno", "module", "msecs",
@@ -59,23 +59,23 @@ def setup_logging(
     json_format: bool = True
 ) -> logging.Logger:
     """
-    Setup structured logging
+    구조화된 로깅 설정
 
     Args:
-        level: Logging level (default: INFO)
-        log_file: Optional log file path
-        json_format: Use JSON line format (default: True)
+        level: 로깅 레벨 (기본값: INFO)
+        log_file: 선택적 로그 파일 경로
+        json_format: JSON 라인 형식 사용 (기본값: True)
 
     Returns:
-        Root logger
+        루트 로거
     """
     logger = logging.getLogger()
     logger.setLevel(level)
 
-    # Remove existing handlers
+    # 기존 핸들러 제거
     logger.handlers.clear()
 
-    # Console handler
+    # 콘솔 핸들러 설정
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setLevel(level)
 
@@ -90,7 +90,7 @@ def setup_logging(
 
     logger.addHandler(console_handler)
 
-    # File handler (if specified)
+    # 파일 핸들러 설정 (지정된 경우)
     if log_file:
         log_path = Path(log_file)
         log_path.parent.mkdir(parents=True, exist_ok=True)
@@ -114,43 +114,46 @@ def setup_logging(
 
 class AgentLogger:
     """
-    Structured logger for agents with run_id tracking
+    run_id 추적 기능을 갖춘 에이전트용 구조화된 로거
+
+    각 실행(run)마다 고유 ID를 부여하여 분산 환경에서도
+    로그를 추적하고 디버깅할 수 있도록 지원합니다.
     """
 
     def __init__(self, agent_name: str, run_id: str):
         """
         Args:
-            agent_name: Name of the agent
-            run_id: Unique run identifier
+            agent_name: 에이전트 이름
+            run_id: 고유 실행 식별자
         """
         self.agent_name = agent_name
         self.run_id = run_id
         self.logger = logging.getLogger(f"agent.{agent_name}")
 
     def _log(self, level: int, message: str, **extra):
-        """Internal log method with extra fields"""
+        """추가 필드와 함께 로그를 기록하는 내부 메서드"""
         extra["run_id"] = self.run_id
         extra["agent"] = self.agent_name
         self.logger.log(level, message, extra=extra)
 
     def debug(self, message: str, **extra):
-        """Log debug message"""
+        """디버그 메시지 로깅"""
         self._log(logging.DEBUG, message, **extra)
 
     def info(self, message: str, **extra):
-        """Log info message"""
+        """정보 메시지 로깅"""
         self._log(logging.INFO, message, **extra)
 
     def warning(self, message: str, **extra):
-        """Log warning message"""
+        """경고 메시지 로깅"""
         self._log(logging.WARNING, message, **extra)
 
     def error(self, message: str, **extra):
-        """Log error message"""
+        """에러 메시지 로깅"""
         self._log(logging.ERROR, message, **extra)
 
     def node_start(self, node_name: str, input_size: int = 0):
-        """Log node start"""
+        """노드 시작 로깅"""
         self.info(
             f"Node started: {node_name}",
             node=node_name,
@@ -159,7 +162,7 @@ class AgentLogger:
         )
 
     def node_end(self, node_name: str, output_size: int = 0, duration_ms: int = 0):
-        """Log node end"""
+        """노드 완료 로깅"""
         self.info(
             f"Node completed: {node_name}",
             node=node_name,
@@ -169,7 +172,7 @@ class AgentLogger:
         )
 
     def node_error(self, node_name: str, error: Exception):
-        """Log node error"""
+        """노드 에러 로깅"""
         self.error(
             f"Node failed: {node_name}",
             node=node_name,
@@ -181,47 +184,47 @@ class AgentLogger:
 
 def log_json_line(data: Dict[str, Any], logger: Optional[logging.Logger] = None):
     """
-    Log a JSON line directly
+    JSON 라인을 직접 로깅
 
     Args:
-        data: Dictionary to log as JSON
-        logger: Optional logger (uses root logger if not provided)
+        data: JSON으로 로깅할 딕셔너리
+        logger: 선택적 로거 (제공하지 않으면 루트 로거 사용)
     """
     if logger is None:
         logger = logging.getLogger()
 
-    # Ensure timestamp
+    # 타임스탬프 보장
     if "timestamp" not in data:
         data["timestamp"] = datetime.utcnow().isoformat() + "Z"
 
-    # Log as JSON string
+    # JSON 문자열로 로깅
     logger.info(json.dumps(data, ensure_ascii=False))
 
 
-# Example usage:
+# 사용 예시:
 if __name__ == "__main__":
     import time
 
-    # Setup JSON logging
+    # JSON 로깅 설정
     setup_logging(level=logging.DEBUG, json_format=True)
 
-    # Create agent logger
+    # 에이전트 로거 생성
     agent_logger = AgentLogger("news_trend_agent", "test-run-123")
 
-    # Log node execution
+    # 노드 실행 로깅
     agent_logger.node_start("collect", input_size=0)
     time.sleep(0.1)
     agent_logger.info("Collecting news from API", api="NewsAPI", query="test")
     time.sleep(0.1)
     agent_logger.node_end("collect", output_size=15, duration_ms=200)
 
-    # Log error
+    # 에러 로깅
     try:
         raise ValueError("Test error")
     except Exception as e:
         agent_logger.node_error("analyze", e)
 
-    # Direct JSON line logging
+    # JSON 라인 직접 로깅
     log_json_line({
         "run_id": "test-run-123",
         "agent": "news_trend_agent",

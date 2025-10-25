@@ -1,5 +1,5 @@
 """
-Retry and backoff utilities for robust API calls
+견고한 API 호출을 위한 재시도 및 백오프 유틸리티
 """
 import time
 import functools
@@ -17,17 +17,17 @@ def backoff_retry(
     on_retry: Optional[Callable[[Exception, int], None]] = None
 ):
     """
-    Decorator for exponential backoff retry
+    지수 백오프 재시도 데코레이터
 
     Args:
-        max_retries: Maximum number of retries (default: 5)
-        backoff_base: Base for exponential backoff (default: 2.0)
-        backoff_factor: Multiplier for backoff (default: 1.0)
-        exceptions: Tuple of exception types to catch
-        on_retry: Optional callback function called on each retry
+        max_retries: 최대 재시도 횟수 (기본값: 5)
+        backoff_base: 지수 백오프의 기저 (기본값: 2.0)
+        backoff_factor: 백오프 배수 (기본값: 1.0)
+        exceptions: 캐치할 예외 타입 튜플
+        on_retry: 각 재시도마다 호출되는 선택적 콜백 함수
 
-    Backoff formula: backoff_factor * (backoff_base ** retry_count)
-    Example: 1 * (2 ** 0) = 1s, 1 * (2 ** 1) = 2s, 1 * (2 ** 2) = 4s, ...
+    백오프 공식: backoff_factor * (backoff_base ** retry_count)
+    예시: 1 * (2 ** 0) = 1초, 1 * (2 ** 1) = 2초, 1 * (2 ** 2) = 4초, ...
     """
     def decorator(func: Callable) -> Callable:
         @functools.wraps(func)
@@ -79,7 +79,7 @@ def backoff_retry(
 
 
 class RetryConfig:
-    """Configuration for retry behavior"""
+    """재시도 동작을 위한 설정"""
 
     def __init__(
         self,
@@ -116,9 +116,9 @@ RETRY_CONFIG_CONSERVATIVE = RetryConfig(
 
 def retry_on_rate_limit(max_retries: int = 3):
     """
-    Specialized retry decorator for rate limit errors
+    API 제한 에러를 위한 특수 재시도 데코레이터
 
-    Common rate limit status codes: 429, 503
+    일반적인 API 제한 상태 코드: 429, 503
     """
     import requests
 

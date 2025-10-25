@@ -1,5 +1,5 @@
 """
-Caching utilities for API responses and expensive operations
+API 응답 및 비용이 큰 연산을 위한 캐싱 유틸리티
 """
 import time
 import hashlib
@@ -15,19 +15,19 @@ logger = logging.getLogger(__name__)
 
 class SimpleCache:
     """
-    Simple in-memory cache with TTL (Time To Live)
+    TTL(Time To Live)을 지원하는 간단한 인메모리 캐시
     """
 
     def __init__(self, default_ttl: int = 3600):
         """
         Args:
-            default_ttl: Default time to live in seconds (default: 1 hour)
+            default_ttl: 기본 TTL 시간(초) (기본값: 1시간)
         """
         self._cache = {}
         self.default_ttl = default_ttl
 
     def get(self, key: str) -> Optional[Any]:
-        """Get value from cache if not expired"""
+        """만료되지 않은 경우 캐시에서 값 조회"""
         if key not in self._cache:
             return None
 
@@ -43,7 +43,7 @@ class SimpleCache:
         return value
 
     def set(self, key: str, value: Any, ttl: Optional[int] = None):
-        """Set value in cache with TTL"""
+        """TTL과 함께 캐시에 값 설정"""
         if ttl is None:
             ttl = self.default_ttl
 
@@ -52,38 +52,38 @@ class SimpleCache:
         logger.debug(f"Cache set: {key} (TTL: {ttl}s)")
 
     def clear(self):
-        """Clear all cache"""
+        """모든 캐시 삭제"""
         self._cache.clear()
         logger.debug("Cache cleared")
 
     def size(self) -> int:
-        """Get number of items in cache"""
+        """캐시 내 항목 수 조회"""
         return len(self._cache)
 
 
 class DiskCache:
     """
-    Disk-based cache for persistent storage
+    영구 저장을 위한 디스크 기반 캐시
     """
 
     def __init__(self, cache_dir: str = ".cache", default_ttl: int = 86400):
         """
         Args:
-            cache_dir: Directory to store cache files
-            default_ttl: Default time to live in seconds (default: 24 hours)
+            cache_dir: 캐시 파일을 저장할 디렉토리
+            default_ttl: 기본 TTL 시간(초) (기본값: 24시간)
         """
         self.cache_dir = Path(cache_dir)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         self.default_ttl = default_ttl
 
     def _get_cache_path(self, key: str) -> Path:
-        """Get file path for cache key"""
+        """캐시 키에 대한 파일 경로 반환"""
         # Hash the key to create a valid filename
         key_hash = hashlib.md5(key.encode()).hexdigest()
         return self.cache_dir / f"{key_hash}.pkl"
 
     def get(self, key: str) -> Optional[Any]:
-        """Get value from disk cache if not expired"""
+        """만료되지 않은 경우 디스크 캐시에서 값 조회"""
         cache_path = self._get_cache_path(key)
 
         if not cache_path.exists():
@@ -109,7 +109,7 @@ class DiskCache:
             return None
 
     def set(self, key: str, value: Any, ttl: Optional[int] = None):
-        """Set value in disk cache with TTL"""
+        """TTL과 함께 디스크 캐시에 값 설정"""
         if ttl is None:
             ttl = self.default_ttl
 
@@ -126,7 +126,7 @@ class DiskCache:
             logger.error(f"Error writing cache: {e}")
 
     def clear(self):
-        """Clear all disk cache"""
+        """모든 디스크 캐시 삭제"""
         for cache_file in self.cache_dir.glob("*.pkl"):
             cache_file.unlink()
         logger.debug("Disk cache cleared")
@@ -143,17 +143,17 @@ def cached(
     key_func: Optional[Callable] = None
 ):
     """
-    Decorator for caching function results
+    함수 결과를 캐싱하는 데코레이터
 
     Args:
-        ttl: Time to live in seconds
-        use_disk: Use disk cache instead of memory cache
-        key_func: Optional function to generate cache key from args/kwargs
+        ttl: TTL 시간(초)
+        use_disk: 메모리 캐시 대신 디스크 캐시 사용
+        key_func: args/kwargs로부터 캐시 키를 생성하는 선택적 함수
 
     Example:
         @cached(ttl=3600)
         def expensive_operation(param1, param2):
-            # ... expensive computation ...
+            # ... 비용이 큰 연산 ...
             return result
     """
     def decorator(func: Callable) -> Callable:
@@ -194,9 +194,9 @@ def cached(
 
 def cache_key_from_query(query: str, **params) -> str:
     """
-    Generate cache key from query and parameters
+    쿼리와 파라미터로부터 캐시 키 생성
 
-    Useful for API calls with consistent parameter structure
+    일관된 파라미터 구조를 가진 API 호출에 유용합니다.
     """
     params_str = json.dumps(params, sort_keys=True)
     combined = f"{query}:{params_str}"

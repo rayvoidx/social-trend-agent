@@ -433,12 +433,15 @@ spike_threshold: float = Field(2.0, description="Z-score threshold")
 pytest agents/viral_video_agent/tests/ -v
 ```
 
-### POW (Proof of Work) 검증
+### 빠른 검증 (5~10분)
 
-5-10분 빠른 검증:
+아래 명령으로 샘플 기반 실행 검증:
 ```bash
-# POW 가이드 참조
-cat agents/viral_video_agent/POW.md
+python scripts/run_agent.py \
+  --agent viral_video_agent \
+  --query "K-pop" \
+  --market KR \
+  --platform youtube
 ```
 
 ---
@@ -560,8 +563,6 @@ python scripts/run_agent.py \
 ---
 
 ## 📚 참고 자료
-
-- [POW.md](POW.md) - 5-10분 검증 가이드
 - [prompts/system.md](prompts/system.md) - 시스템 프롬프트
 - [tools.py](tools.py) - 도구 구현
 - [graph.py](graph.py) - LangGraph 정의

@@ -1,0 +1,39 @@
+{
+  "$schema": "https://modelcontextprotocol.io/schema/config.json",
+  "mcpServers": {
+    "filesystem": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"],
+      "env": {},
+      "description": "Filesystem access for reading/writing artifacts"
+    },
+    "fetch": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-fetch"],
+      "env": {},
+      "description": "Web content fetching for data collection"
+    },
+    "brave-search": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-brave-search"],
+      "env": {
+        "BRAVE_API_KEY": "${BRAVE_API_KEY}"
+      },
+      "description": "Web search using Brave Search API (optional)"
+    },
+    "postgres": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-postgres", "${DATABASE_URL}"],
+      "env": {},
+      "description": "PostgreSQL database for persistent storage (optional)"
+    }
+  },
+  "defaults": {
+    "timeout": 30000,
+    "retries": 3
+  },
+  "logging": {
+    "level": "info",
+    "file": "logs/mcp.log"
+  }
+}

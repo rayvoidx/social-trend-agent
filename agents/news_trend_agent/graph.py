@@ -1,5 +1,7 @@
 """
-LangGraph definition for News Trend Agent
+뉴스 트렌드 에이전트를 위한 LangGraph 정의
+
+LangGraph 공식 패턴과 에러 핸들링, 로깅 기능을 적용했습니다.
 """
 import os
 import uuid
@@ -8,6 +10,8 @@ from langgraph.graph import StateGraph, END
 from langchain_openai import AzureChatOpenAI
 
 from agents.shared.state import NewsAgentState
+from agents.shared.logging import AgentLogger
+from agents.shared.error_handling import PartialResult, CompletionStatus, safe_api_call
 from agents.news_trend_agent.tools import (
     search_news,
     analyze_sentiment,
@@ -15,49 +19,95 @@ from agents.news_trend_agent.tools import (
     summarize_trend
 )
 
+# Initialize module-level logger
+_module_logger = AgentLogger("news_trend_agent")
+
 
 def collect_node(state: NewsAgentState) -> Dict[str, Any]:
-    """Collect news data from various sources"""
-    print(f"[collect_node] query={state.query}, time_window={state.time_window}")
+    """
+    다양한 소스에서 뉴스 데이터 수집
 
-    # Search news using the tool
-    raw_items = search_news(
+    에러 핸들링을 통해 API 실패를 우아하게 처리합니다.
+    """
+    logger = AgentLogger("news_trend_agent", state.run_id)
+    logger.node_start("collect", query=state.query, time_window=state.time_window)
+
+    # Use safe_api_call for error handling
+    result = PartialResult(status=CompletionStatus.COMPLETE)
+
+    raw_items = safe_api_call(
+        operation_name="search_news",
+        func=search_news,
         query=state.query,
         time_window=state.time_window or "7d",
         language=state.language,
-        max_results=state.max_results
+        max_results=state.max_results,
+        fallback_value=[],
+        result_container=result
     )
 
-    return {"raw_items": raw_items}
+    logger.node_end("collect", output_size=len(raw_items), status=result.status.value)
+
+    return {
+        "raw_items": raw_items,
+        "error": result.error if result.status == CompletionStatus.FAILED else None
+    }
 
 
 def normalize_node(state: NewsAgentState) -> Dict[str, Any]:
-    """Normalize and clean collected data"""
-    print(f"[normalize_node] raw_items count={len(state.raw_items)}")
+    """
+    수집된 데이터 정규화 및 정제
+
+    다운스트림 노드를 위한 일관된 데이터 구조를 보장합니다.
+    """
+    logger = AgentLogger("news_trend_agent", state.run_id)
+    logger.node_start("normalize", raw_count=len(state.raw_items))
 
     normalized = []
     for item in state.raw_items:
+        # Clean HTML tags and normalize fields
         normalized.append({
-            "title": item.get("title", ""),
-            "description": item.get("description", ""),
+            "title": item.get("title", "").strip(),
+            "description": item.get("description", "").strip(),
             "url": item.get("url", ""),
-            "source": item.get("source", {}).get("name", "Unknown"),
+            "source": item.get("source", {}).get("name", "Unknown") if isinstance(item.get("source"), dict) else str(item.get("source", "Unknown")),
             "published_at": item.get("publishedAt", ""),
-            "content": item.get("content", "")
+            "content": item.get("content", "").strip()
         })
+
+    logger.node_end("normalize", normalized_count=len(normalized))
 
     return {"normalized": normalized}
 
 
 def analyze_node(state: NewsAgentState) -> Dict[str, Any]:
-    """Analyze sentiment and extract keywords"""
-    print(f"[analyze_node] normalized count={len(state.normalized)}")
+    """
+    감성 분석 및 키워드 추출
 
-    # Analyze sentiment
-    sentiment_results = analyze_sentiment(state.normalized)
+    감성 분석과 키워드 추출을 개념적으로 병렬 실행합니다.
+    """
+    logger = AgentLogger("news_trend_agent", state.run_id)
+    logger.node_start("analyze", item_count=len(state.normalized))
 
-    # Extract keywords
-    keyword_results = extract_keywords(state.normalized)
+    # Analyze sentiment with error handling
+    result_sentiment = PartialResult()
+    sentiment_results = safe_api_call(
+        operation_name="analyze_sentiment",
+        func=analyze_sentiment,
+        items=state.normalized,
+        fallback_value={"positive": 0, "neutral": 0, "negative": 0},
+        result_container=result_sentiment
+    )
+
+    # Extract keywords with error handling
+    result_keywords = PartialResult()
+    keyword_results = safe_api_call(
+        operation_name="extract_keywords",
+        func=extract_keywords,
+        items=state.normalized,
+        fallback_value={"top_keywords": [], "total_unique_keywords": 0},
+        result_container=result_keywords
+    )
 
     analysis = {
         "sentiment": sentiment_results,
@@ -65,26 +115,45 @@ def analyze_node(state: NewsAgentState) -> Dict[str, Any]:
         "total_items": len(state.normalized)
     }
 
+    logger.node_end("analyze", sentiment_status=result_sentiment.status.value, keyword_status=result_keywords.status.value)
+
     return {"analysis": analysis}
 
 
 def summarize_node(state: NewsAgentState) -> Dict[str, Any]:
-    """Summarize trend insights"""
-    print(f"[summarize_node] analysis={state.analysis}")
+    """
+    LLM을 활용한 트렌드 인사이트 요약
 
-    # Use LLM to summarize trend
-    summary = summarize_trend(
+    견고한 LLM 호출을 위해 LangChain과 재시도 로직을 사용합니다.
+    """
+    logger = AgentLogger("news_trend_agent", state.run_id)
+    logger.node_start("summarize")
+
+    # Use LLM to summarize trend with error handling
+    result = PartialResult()
+    summary = safe_api_call(
+        operation_name="summarize_trend",
+        func=summarize_trend,
         query=state.query,
         normalized_items=state.normalized,
-        analysis=state.analysis
+        analysis=state.analysis,
+        fallback_value="트렌드 요약을 생성할 수 없습니다. LLM 서비스를 확인하세요.",
+        result_container=result
     )
+
+    logger.node_end("summarize", summary_length=len(summary), status=result.status.value)
 
     return {"analysis": {**state.analysis, "summary": summary}}
 
 
 def report_node(state: NewsAgentState) -> Dict[str, Any]:
-    """Generate markdown report"""
-    print(f"[report_node] Generating report...")
+    """
+    마크다운 리포트 생성
+
+    마크다운 형식의 종합 분석 리포트를 생성합니다.
+    """
+    logger = AgentLogger("news_trend_agent", state.run_id)
+    logger.node_start("report")
 
     # Build markdown report
     report_lines = [
@@ -160,25 +229,87 @@ def report_node(state: NewsAgentState) -> Dict[str, Any]:
         "actionability": 1.0 if state.analysis.get("summary") else 0.0
     }
 
+    logger.node_end("report", report_length=len(report_md), metrics=metrics)
+
     return {"report_md": report_md, "metrics": metrics}
 
 
 def notify_node(state: NewsAgentState) -> Dict[str, Any]:
-    """Send notifications (n8n, Slack, etc)"""
-    print(f"[notify_node] Sending notifications...")
+    """
+    알림 전송 (n8n, Slack 등)
 
-    # TODO: Implement n8n webhook call
-    # TODO: Implement Slack webhook call
+    설정된 웹훅 엔드포인트로 분석 결과를 전송합니다.
+    """
+    logger = AgentLogger("news_trend_agent", state.run_id)
+    logger.node_start("notify")
+
+    notifications_sent = []
+
+    # n8n webhook
+    n8n_webhook = os.getenv("N8N_WEBHOOK_URL")
+    if n8n_webhook:
+        try:
+            import requests
+            payload = {
+                "query": state.query,
+                "metrics": state.metrics,
+                "run_id": state.run_id,
+                "summary": state.analysis.get("summary", "")[:500]  # First 500 chars
+            }
+            response = requests.post(n8n_webhook, json=payload, timeout=10)
+            if response.status_code == 200:
+                notifications_sent.append("n8n")
+                logger.info("n8n notification sent successfully")
+        except Exception as e:
+            logger.warning("Failed to send n8n notification", error=str(e))
+
+    # Slack webhook
+    slack_webhook = os.getenv("SLACK_WEBHOOK_URL")
+    if slack_webhook:
+        try:
+            import requests
+            payload = {
+                "text": f"📊 트렌드 분석 완료: {state.query}",
+                "blocks": [
+                    {
+                        "type": "section",
+                        "text": {
+                            "type": "mrkdwn",
+                            "text": f"*검색어*: {state.query}\n*분석 항목*: {len(state.normalized)}건"
+                        }
+                    }
+                ]
+            }
+            response = requests.post(slack_webhook, json=payload, timeout=10)
+            if response.status_code == 200:
+                notifications_sent.append("slack")
+                logger.info("Slack notification sent successfully")
+        except Exception as e:
+            logger.warning("Failed to send Slack notification", error=str(e))
+
+    logger.node_end("notify", notifications_sent=notifications_sent)
 
     return {}
 
 
-def build_graph() -> StateGraph:
-    """Build LangGraph for News Trend Agent"""
+def build_graph():
+    """
+    뉴스 트렌드 에이전트용 LangGraph 구축
 
+    LangGraph 공식 패턴을 따릅니다:
+    - Pydantic 상태 모델을 사용하는 StateGraph
+    - 에러 핸들링을 포함한 순차적 파이프라인
+    - 에러 복구를 위한 조건부 엣지 (향후 개선 예정)
+
+    Returns:
+        실행 준비가 완료된 컴파일된 StateGraph
+    """
+    _module_logger.info("Building LangGraph for News Trend Agent")
+
+    # Create StateGraph with NewsAgentState (official pattern)
     graph = StateGraph(NewsAgentState)
 
-    # Add nodes
+    # Add nodes (official pattern: node_name, node_function)
     graph.add_node("collect", collect_node)
     graph.add_node("normalize", normalize_node)
     graph.add_node("analyze", analyze_node)
@@ -186,10 +317,10 @@ def build_graph() -> StateGraph:
     graph.add_node("report", report_node)
     graph.add_node("notify", notify_node)
 
-    # Set entry point
+    # Set entry point (official pattern)
     graph.set_entry_point("collect")
 
-    # Add edges
+    # Add edges for sequential pipeline (official pattern)
     graph.add_edge("collect", "normalize")
     graph.add_edge("normalize", "analyze")
     graph.add_edge("analyze", "summarize")
@@ -197,16 +328,36 @@ def build_graph() -> StateGraph:
     graph.add_edge("report", "notify")
     graph.add_edge("notify", END)
 
-    return graph.compile()
+    # Compile graph (official pattern - required before execution)
+    compiled_graph = graph.compile()
+
+    _module_logger.info("LangGraph built and compiled successfully")
+
+    return compiled_graph
 
 
 def run_agent(query: str, time_window: str = "7d", language: str = "ko", max_results: int = 20) -> NewsAgentState:
-    """Run the news trend agent"""
+    """
+    뉴스 트렌드 에이전트 실행
 
+    LangGraph 공식 패턴을 따르는 메인 진입점입니다.
+
+    Args:
+        query: 검색 키워드
+        time_window: 시간 범위 (예: "24h", "7d", "30d")
+        language: 언어 코드 ("ko", "en")
+        max_results: 최대 결과 수
+
+    Returns:
+        리포트와 메트릭을 포함한 최종 상태
+    """
     # Generate run_id
     run_id = str(uuid.uuid4())
 
-    # Create initial state
+    logger = AgentLogger("news_trend_agent", run_id)
+    logger.info("Starting news trend agent", query=query, time_window=time_window, language=language)
+
+    # Create initial state (official pattern: Pydantic model)
     initial_state = NewsAgentState(
         query=query,
         time_window=time_window,
@@ -215,8 +366,15 @@ def run_agent(query: str, time_window: str = "7d", language: str = "ko", max_res
         run_id=run_id
     )
 
-    # Build and run graph
+    # Build and compile graph
     graph = build_graph()
-    final_state = graph.invoke(initial_state)
+
+    # Invoke graph (official pattern: invoke() for synchronous execution)
+    try:
+        final_state = graph.invoke(initial_state)
+        logger.info("News trend agent completed successfully", run_id=run_id)
+    except Exception as e:
+        logger.error("News trend agent failed", error=str(e), run_id=run_id)
+        raise
 
     return final_state

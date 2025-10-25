@@ -1,7 +1,7 @@
 [project]
 name = "consumer-trend-agent"
 description = "Automatic Consumer Trend Analysis Multi-Agent System"
-version = "1.0.0"
+version = "4.0.0"
 authors = [
     { name = "Trend Analysis Team", email = "dev@example.com" }
 ]
@@ -27,11 +27,18 @@ dependencies = [
     "anthropic",
     "google-generativeai==0.8.5",
 
-    # LangChain & LangGraph
+    # LangChain & LangGraph (Official Integrations)
     "langchain==0.3.26",
     "langchain-community==0.3.27",
-    "langgraph",
-    "langchain-openai",
+    "langchain-core>=0.3.0",
+    "langgraph>=0.2.0",
+    "langchain-openai>=0.2.0",
+    "langchain-anthropic>=0.3.0",
+    "langchain-google-genai>=2.0.0",
+
+    # MCP (Model Context Protocol)
+    "mcp>=1.0.0",
+    "langchain-mcp-adapters>=0.1.0",
 
     # Data Processing
     "pandas==2.2.3",
@@ -41,9 +48,20 @@ dependencies = [
     "python-dotenv",
     "tiktoken",
 
+    # Performance Monitoring
+    "psutil>=5.9.0",
+
+    # Configuration (v4.0)
+    "pydantic-settings>=2.0.0",
+    "PyYAML>=6.0",
+
+    # WebSocket support (v4.0)
+    "websockets>=12.0",
+
     # Testing
     "pytest>=8.0.0",
     "pytest-asyncio>=0.23.0",
+    "pytest-mock>=3.12.0",
 ]
 
 [project.optional-dependencies]

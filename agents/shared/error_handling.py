@@ -1,5 +1,5 @@
 """
-Error handling utilities for graceful degradation
+우아한 실패 처리를 위한 에러 핸들링 유틸리티
 """
 from typing import Dict, Any, Optional, List
 from datetime import datetime
@@ -7,7 +7,7 @@ from enum import Enum
 
 
 class CompletionStatus(Enum):
-    """Completion status for agent operations"""
+    """에이전트 작업의 완료 상태"""
     FULL = "full"
     PARTIAL = "partial"
     FAILED = "failed"
@@ -15,7 +15,9 @@ class CompletionStatus(Enum):
 
 class PartialResult:
     """
-    Container for partial results with metadata about what succeeded/failed
+    부분 결과 컨테이너
+
+    성공/실패한 작업에 대한 메타데이터를 포함합니다.
     """
 
     def __init__(
@@ -30,13 +32,13 @@ class PartialResult:
     ):
         """
         Args:
-            status: Overall completion status
-            data: The actual result data (may be incomplete)
-            successful_operations: List of operations that succeeded
-            failed_operations: List of operations that failed
-            errors: List of error details
-            warnings: List of warnings to include in report
-            limitations: List of limitations to disclose
+            status: 전체 완료 상태
+            data: 실제 결과 데이터 (불완전할 수 있음)
+            successful_operations: 성공한 작업 목록
+            failed_operations: 실패한 작업 목록
+            errors: 에러 상세 정보 목록
+            warnings: 리포트에 포함할 경고 목록
+            limitations: 공개할 제한사항 목록
         """
         self.status = status
         self.data = data
@@ -48,7 +50,7 @@ class PartialResult:
         self.timestamp = datetime.utcnow().isoformat() + "Z"
 
     def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary for serialization"""
+        """직렬화를 위해 딕셔너리로 변환"""
         return {
             "status": self.status.value,
             "data": self.data,
@@ -61,21 +63,21 @@ class PartialResult:
         }
 
     def add_warning(self, warning: str):
-        """Add a warning message"""
+        """경고 메시지 추가"""
         self.warnings.append(warning)
 
     def add_limitation(self, limitation: str):
-        """Add a limitation note"""
+        """제한사항 노트 추가"""
         self.limitations.append(limitation)
 
     def add_error(self, operation: str, error: Exception, context: Optional[Dict] = None):
         """
-        Add error details
+        에러 상세 정보 추가
 
         Args:
-            operation: Name of the failed operation
-            error: The exception that occurred
-            context: Additional context (e.g., API endpoint, query)
+            operation: 실패한 작업명
+            error: 발생한 예외
+            context: 추가 컨텍스트 (예: API 엔드포인트, 쿼리)
         """
         error_detail = {
             "operation": operation,
@@ -89,20 +91,20 @@ class PartialResult:
             self.failed_operations.append(operation)
 
     def mark_success(self, operation: str):
-        """Mark an operation as successful"""
+        """작업을 성공으로 표시"""
         if operation not in self.successful_operations:
             self.successful_operations.append(operation)
 
     def is_usable(self) -> bool:
-        """Check if result is usable despite being partial"""
+        """부분 완료 상태임에도 결과가 사용 가능한지 확인"""
         return self.status in (CompletionStatus.FULL, CompletionStatus.PARTIAL)
 
     def get_markdown_notice(self) -> str:
         """
-        Generate markdown notice for reports
+        리포트용 마크다운 노티스 생성
 
         Returns:
-            Markdown formatted notice about partial completion
+            부분 완료에 대한 마크다운 형식의 알림
         """
         if self.status == CompletionStatus.FULL:
             return ""
@@ -145,13 +147,13 @@ class PartialResult:
 
 def create_full_result(data: Any) -> PartialResult:
     """
-    Create a fully successful result
+    완전히 성공한 결과 생성
 
     Args:
-        data: The complete result data
+        data: 완전한 결과 데이터
 
     Returns:
-        PartialResult with FULL status
+        FULL 상태의 PartialResult
     """
     return PartialResult(status=CompletionStatus.FULL, data=data)
 
@@ -163,16 +165,16 @@ def create_partial_result(
     limitations: Optional[List[str]] = None
 ) -> PartialResult:
     """
-    Create a partial result
+    부분 결과 생성
 
     Args:
-        data: The partial result data
-        successful_ops: Operations that succeeded
-        failed_ops: Operations that failed
-        limitations: Optional limitations to note
+        data: 부분 결과 데이터
+        successful_ops: 성공한 작업들
+        failed_ops: 실패한 작업들
+        limitations: 선택적 제한사항
 
     Returns:
-        PartialResult with PARTIAL status
+        PARTIAL 상태의 PartialResult
     """
     result = PartialResult(
         status=CompletionStatus.PARTIAL,
@@ -186,13 +188,13 @@ def create_partial_result(
 
 def create_failed_result(errors: List[Dict[str, Any]]) -> PartialResult:
     """
-    Create a failed result
+    실패한 결과 생성
 
     Args:
-        errors: List of error details
+        errors: 에러 상세 정보 리스트
 
     Returns:
-        PartialResult with FAILED status
+        FAILED 상태의 PartialResult
     """
     return PartialResult(
         status=CompletionStatus.FAILED,
@@ -210,18 +212,18 @@ def safe_api_call(
     **kwargs
 ):
     """
-    Safely execute an API call with error handling
+    에러 핸들링을 통한 안전한 API 호출
 
     Args:
-        operation_name: Name of the operation (for logging)
-        api_func: Function to call
-        *args: Positional arguments for api_func
-        fallback_value: Value to return on failure
-        result_container: Optional PartialResult to update
-        **kwargs: Keyword arguments for api_func
+        operation_name: 작업명 (로깅용)
+        api_func: 호출할 함수
+        *args: api_func의 위치 인자
+        fallback_value: 실패 시 반환할 값
+        result_container: 업데이트할 선택적 PartialResult
+        **kwargs: api_func의 키워드 인자
 
     Returns:
-        Result from api_func or fallback_value on error
+        api_func의 결과 또는 에러 시 fallback_value
     """
     try:
         result = api_func(*args, **kwargs)
@@ -242,22 +244,22 @@ def safe_api_call(
         return fallback_value
 
 
-# Example usage:
+# 사용 예제:
 if __name__ == "__main__":
     import requests
 
-    # Example 1: Full success
+    # 예제 1: 완전 성공
     result = create_full_result({"data": [1, 2, 3]})
     print("Full result status:", result.status.value)
-    print(result.get_markdown_notice())  # Empty for full success
+    print(result.get_markdown_notice())  # 완전 성공 시 빈 문자열
 
-    # Example 2: Partial completion
+    # 예제 2: 부분 완료
     partial_result = PartialResult(status=CompletionStatus.PARTIAL)
     partial_result.mark_success("news_api")
     partial_result.mark_success("sentiment_analysis")
 
     try:
-        # Simulate API failure
+        # API 실패 시뮬레이션
         raise requests.exceptions.Timeout("API timeout after 30s")
     except Exception as e:
         partial_result.add_error("video_api", e, context={"platform": "youtube"})
@@ -268,7 +270,7 @@ if __name__ == "__main__":
     print("\nPartial result notice:")
     print(partial_result.get_markdown_notice())
 
-    # Example 3: Using safe_api_call
+    # 예제 3: safe_api_call 사용
     result_container = PartialResult(status=CompletionStatus.PARTIAL, data={})
 
     def flaky_api():

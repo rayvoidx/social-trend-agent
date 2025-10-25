@@ -1,7 +1,15 @@
 """
 Unit tests for news_trend_agent tools
+
+Tests follow pytest best practices and include:
+- Data collection (search_news)
+- Analysis (sentiment, keywords)
+- Summarization (LLM integration)
+- Helper functions
 """
 import pytest
+import os
+from unittest.mock import patch, MagicMock
 from agents.news_trend_agent.tools import (
     search_news,
     analyze_sentiment,
