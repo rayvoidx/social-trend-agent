@@ -22,9 +22,9 @@ RUN pip install --no-cache-dir --upgrade pip && \
 
 # Copy application code
 COPY agents/ ./agents/
+COPY backend/ ./backend/
 COPY scripts/ ./scripts/
 COPY automation/ ./automation/
-COPY artifacts/ ./artifacts/
 
 # Create necessary directories
 RUN mkdir -p /app/artifacts/news_trend_agent && \

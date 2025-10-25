@@ -12,6 +12,7 @@ References:
 """
 import os
 import uuid
+import logging
 from typing import Dict, Any, Literal
 from langgraph.graph import StateGraph, END
 import asyncio
@@ -26,8 +27,8 @@ from agents.news_trend_agent.tools import (
     summarize_trend
 )
 
-# Initialize logger
-_module_logger = AgentLogger("news_trend_agent_advanced")
+# Initialize module-level logger (without run_id for module-level logging)
+_module_logger = logging.getLogger("news_trend_agent_advanced")
 
 
 # ============================================================================

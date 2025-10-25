@@ -5,9 +5,9 @@ LangGraph 공식 패턴과 에러 핸들링, 로깅 기능을 적용했습니다
 """
 import os
 import uuid
+import logging
 from typing import Dict, Any
 from langgraph.graph import StateGraph, END
-from langchain_openai import AzureChatOpenAI
 
 from agents.shared.state import NewsAgentState
 from agents.shared.logging import AgentLogger
@@ -19,8 +19,8 @@ from agents.news_trend_agent.tools import (
     summarize_trend
 )
 
-# Initialize module-level logger
-_module_logger = AgentLogger("news_trend_agent")
+# Initialize module-level logger (without run_id for module-level logging)
+_module_logger = logging.getLogger("news_trend_agent")
 
 
 def collect_node(state: NewsAgentState) -> Dict[str, Any]:
@@ -30,14 +30,15 @@ def collect_node(state: NewsAgentState) -> Dict[str, Any]:
     에러 핸들링을 통해 API 실패를 우아하게 처리합니다.
     """
     logger = AgentLogger("news_trend_agent", state.run_id)
-    logger.node_start("collect", query=state.query, time_window=state.time_window)
+    logger.node_start("collect")
+    logger.info(f"Collecting news: query={state.query}, time_window={state.time_window}")
 
     # Use safe_api_call for error handling
-    result = PartialResult(status=CompletionStatus.COMPLETE)
+    result = PartialResult(status=CompletionStatus.FULL)
 
     raw_items = safe_api_call(
-        operation_name="search_news",
-        func=search_news,
+        "search_news",
+        search_news,
         query=state.query,
         time_window=state.time_window or "7d",
         language=state.language,
@@ -46,7 +47,7 @@ def collect_node(state: NewsAgentState) -> Dict[str, Any]:
         result_container=result
     )
 
-    logger.node_end("collect", output_size=len(raw_items), status=result.status.value)
+    logger.node_end("collect", output_size=len(raw_items))
 
     return {
         "raw_items": raw_items,
@@ -61,7 +62,7 @@ def normalize_node(state: NewsAgentState) -> Dict[str, Any]:
     다운스트림 노드를 위한 일관된 데이터 구조를 보장합니다.
     """
     logger = AgentLogger("news_trend_agent", state.run_id)
-    logger.node_start("normalize", raw_count=len(state.raw_items))
+    logger.node_start("normalize", input_size=len(state.raw_items))
 
     normalized = []
     for item in state.raw_items:
@@ -75,7 +76,7 @@ def normalize_node(state: NewsAgentState) -> Dict[str, Any]:
             "content": item.get("content", "").strip()
         })
 
-    logger.node_end("normalize", normalized_count=len(normalized))
+    logger.node_end("normalize", output_size=len(normalized))
 
     return {"normalized": normalized}
 
@@ -87,23 +88,23 @@ def analyze_node(state: NewsAgentState) -> Dict[str, Any]:
     감성 분석과 키워드 추출을 개념적으로 병렬 실행합니다.
     """
     logger = AgentLogger("news_trend_agent", state.run_id)
-    logger.node_start("analyze", item_count=len(state.normalized))
+    logger.node_start("analyze", input_size=len(state.normalized))
 
     # Analyze sentiment with error handling
-    result_sentiment = PartialResult()
+    result_sentiment = PartialResult(status=CompletionStatus.FULL)
     sentiment_results = safe_api_call(
-        operation_name="analyze_sentiment",
-        func=analyze_sentiment,
+        "analyze_sentiment",
+        analyze_sentiment,
         items=state.normalized,
         fallback_value={"positive": 0, "neutral": 0, "negative": 0},
         result_container=result_sentiment
     )
 
     # Extract keywords with error handling
-    result_keywords = PartialResult()
+    result_keywords = PartialResult(status=CompletionStatus.FULL)
     keyword_results = safe_api_call(
-        operation_name="extract_keywords",
-        func=extract_keywords,
+        "extract_keywords",
+        extract_keywords,
         items=state.normalized,
         fallback_value={"top_keywords": [], "total_unique_keywords": 0},
         result_container=result_keywords
@@ -115,7 +116,7 @@ def analyze_node(state: NewsAgentState) -> Dict[str, Any]:
         "total_items": len(state.normalized)
     }
 
-    logger.node_end("analyze", sentiment_status=result_sentiment.status.value, keyword_status=result_keywords.status.value)
+    logger.node_end("analyze", output_size=len(state.normalized))
 
     return {"analysis": analysis}
 
@@ -130,10 +131,10 @@ def summarize_node(state: NewsAgentState) -> Dict[str, Any]:
     logger.node_start("summarize")
 
     # Use LLM to summarize trend with error handling
-    result = PartialResult()
+    result = PartialResult(status=CompletionStatus.FULL)
     summary = safe_api_call(
-        operation_name="summarize_trend",
-        func=summarize_trend,
+        "summarize_trend",
+        summarize_trend,
         query=state.query,
         normalized_items=state.normalized,
         analysis=state.analysis,
@@ -141,7 +142,7 @@ def summarize_node(state: NewsAgentState) -> Dict[str, Any]:
         result_container=result
     )
 
-    logger.node_end("summarize", summary_length=len(summary), status=result.status.value)
+    logger.node_end("summarize", output_size=len(summary))
 
     return {"analysis": {**state.analysis, "summary": summary}}
 
@@ -229,7 +230,7 @@ def report_node(state: NewsAgentState) -> Dict[str, Any]:
         "actionability": 1.0 if state.analysis.get("summary") else 0.0
     }
 
-    logger.node_end("report", report_length=len(report_md), metrics=metrics)
+    logger.node_end("report", output_size=len(report_md))
 
     return {"report_md": report_md, "metrics": metrics}
 
@@ -287,7 +288,7 @@ def notify_node(state: NewsAgentState) -> Dict[str, Any]:
         except Exception as e:
             logger.warning("Failed to send Slack notification", error=str(e))
 
-    logger.node_end("notify", notifications_sent=notifications_sent)
+    logger.node_end("notify", output_size=len(notifications_sent))
 
     return {}
 

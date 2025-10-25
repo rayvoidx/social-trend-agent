@@ -86,26 +86,26 @@ def save_output(final_state, agent_name, emit_format='md', notify_channels=None)
     artifacts_dir.mkdir(parents=True, exist_ok=True)
 
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    run_id = final_state.run_id or timestamp
+    run_id = final_state.get('run_id') or timestamp
 
     # Save markdown report
     if emit_format == 'md' or 'md' in emit_format.split(','):
         md_file = artifacts_dir / f"{run_id}.md"
         with open(md_file, 'w', encoding='utf-8') as f:
-            f.write(final_state.report_md)
+            f.write(final_state.get('report_md', ''))
         print(f"\n✅ Markdown report saved: {md_file}")
 
     # Save JSON output
     if emit_format == 'json' or 'json' in emit_format.split(','):
         json_file = artifacts_dir / f"{run_id}.json"
         output_data = {
-            'run_id': final_state.run_id,
-            'query': final_state.query,
-            'time_window': final_state.time_window,
-            'analysis': final_state.analysis,
-            'metrics': final_state.metrics,
-            'total_items': len(final_state.normalized),
-            'report_md': final_state.report_md
+            'run_id': final_state.get('run_id'),
+            'query': final_state.get('query'),
+            'time_window': final_state.get('time_window'),
+            'analysis': final_state.get('analysis', {}),
+            'metrics': final_state.get('metrics', {}),
+            'total_items': len(final_state.get('normalized', [])),
+            'report_md': final_state.get('report_md', '')
         }
         with open(json_file, 'w', encoding='utf-8') as f:
             json.dump(output_data, f, indent=2, ensure_ascii=False)
@@ -115,10 +115,10 @@ def save_output(final_state, agent_name, emit_format='md', notify_channels=None)
     metrics_file = artifacts_dir / f"{run_id}_metrics.json"
     with open(metrics_file, 'w', encoding='utf-8') as f:
         json.dump({
-            'run_id': final_state.run_id,
+            'run_id': final_state.get('run_id'),
             'timestamp': timestamp,
-            'metrics': final_state.metrics,
-            'item_count': len(final_state.normalized)
+            'metrics': final_state.get('metrics', {}),
+            'item_count': len(final_state.get('normalized', []))
         }, f, indent=2)
     print(f"✅ Metrics saved: {metrics_file}")
 
@@ -148,10 +148,10 @@ def send_n8n_notification(final_state):
     import requests
 
     payload = {
-        'run_id': final_state.run_id,
-        'query': final_state.query,
-        'metrics': final_state.metrics,
-        'summary': final_state.analysis.get('summary', 'No summary'),
+        'run_id': final_state.get('run_id'),
+        'query': final_state.get('query'),
+        'metrics': final_state.get('metrics', {}),
+        'summary': final_state.get('analysis', {}).get('summary', 'No summary'),
         'timestamp': datetime.now().isoformat()
     }
 
@@ -174,17 +174,17 @@ def send_slack_notification(final_state):
     import requests
 
     # Build Slack message
-    sentiment = final_state.analysis.get('sentiment', {})
-    keywords = final_state.analysis.get('keywords', {}).get('top_keywords', [])[:5]
+    sentiment = final_state.get('analysis', {}).get('sentiment', {})
+    keywords = final_state.get('analysis', {}).get('keywords', {}).get('top_keywords', [])[:5]
 
     message = {
-        'text': f"🔍 Agent Run Complete: {final_state.query}",
+        'text': f"🔍 Agent Run Complete: {final_state.get('query')}",
         'blocks': [
             {
                 'type': 'header',
                 'text': {
                     'type': 'plain_text',
-                    'text': f"📊 Analysis: {final_state.query}"
+                    'text': f"📊 Analysis: {final_state.get('query')}"
                 }
             },
             {
@@ -192,11 +192,11 @@ def send_slack_notification(final_state):
                 'fields': [
                     {
                         'type': 'mrkdwn',
-                        'text': f"*Run ID:*\n`{final_state.run_id}`"
+                        'text': f"*Run ID:*\n`{final_state.get('run_id')}`"
                     },
                     {
                         'type': 'mrkdwn',
-                        'text': f"*Items Analyzed:*\n{len(final_state.normalized)}"
+                        'text': f"*Items Analyzed:*\n{len(final_state.get('normalized', []))}"
                     }
                 ]
             },
@@ -287,13 +287,13 @@ Examples:
     print(f"\n{'='*80}")
     print("📄 REPORT")
     print(f"{'='*80}\n")
-    print(final_state.report_md)
+    print(final_state.get("report_md", "No report generated"))
     print(f"\n{'='*80}")
 
     # Display metrics
     print("\n📊 METRICS")
     print(f"{'='*80}")
-    print(json.dumps(final_state.metrics, indent=2))
+    print(json.dumps(final_state.get("metrics", {}), indent=2))
     print(f"{'='*80}\n")
 
     # Save output and notify
@@ -301,7 +301,7 @@ Examples:
 
     print(f"\n✨ Agent execution completed successfully!")
     print(f"📁 Output: {output_file}")
-    print(f"🆔 Run ID: {final_state.run_id}\n")
+    print(f"🆔 Run ID: {final_state.get('run_id')}\n")
 
 
 if __name__ == '__main__':

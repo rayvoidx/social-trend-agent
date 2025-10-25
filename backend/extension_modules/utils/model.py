@@ -8,16 +8,16 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv()
 
-# LLM Provider Configuration
-LLM_PROVIDER = os.getenv("LLM_PROVIDER", "azure_openai")
+# LLM Provider Configuration (기본값: OpenAI)
+LLM_PROVIDER = os.getenv("LLM_PROVIDER", "openai")
 
 # OpenAI / Azure OpenAI Configuration (unified naming)
-OPENAI_API_TYPE = os.getenv("OPENAI_API_TYPE", "azure")
+OPENAI_API_TYPE = os.getenv("OPENAI_API_TYPE", "openai")
 OPENAI_API_BASE = os.getenv("OPENAI_API_BASE")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 OPENAI_API_VERSION = os.getenv("OPENAI_API_VERSION", "2024-02-15-preview")
-OPENAI_DEPLOYMENT_NAME = os.getenv("OPENAI_DEPLOYMENT_NAME", "gpt-4")
-OPENAI_MODEL_NAME = os.getenv("OPENAI_MODEL_NAME", "gpt-4")
+OPENAI_DEPLOYMENT_NAME = os.getenv("OPENAI_DEPLOYMENT_NAME", "gpt-4o")
+OPENAI_MODEL_NAME = os.getenv("OPENAI_MODEL_NAME", "gpt-4o")
 
 # Anthropic Configuration
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")

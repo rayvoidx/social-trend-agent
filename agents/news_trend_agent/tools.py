@@ -5,6 +5,7 @@ Phase 3 유틸리티 통합: 재시도, 캐싱, 로깅
 """
 import os
 import time
+import logging
 from typing import List, Dict, Any
 from datetime import datetime, timedelta
 import requests
@@ -15,14 +16,14 @@ from agents.shared.cache import cached
 from agents.shared.logging import AgentLogger
 
 # LangChain for LLM integration
-from langchain_openai import AzureChatOpenAI, ChatOpenAI
+# LLM import removed - using mk_model from backend.extension_modules.utils.model, ChatOpenAI
 from langchain_anthropic import ChatAnthropic
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 
-# Initialize logger
-logger = AgentLogger("news_trend_agent")
+# Initialize module-level logger (without run_id for module-level logging)
+logger = logging.getLogger("news_trend_agent")
 
 
 # ============================================================================
@@ -50,7 +51,7 @@ def search_news(
     Returns:
         title, description, url, source, publishedAt을 포함한 뉴스 항목 리스트
     """
-    logger.info("Searching news", query=query, time_window=time_window, language=language, max_results=max_results)
+    logger.info(f"Searching news: query={query}, time_window={time_window}, language={language}, max_results={max_results}")
 
     news_items = []
 
@@ -75,7 +76,7 @@ def search_news(
         logger.warning("No API keys found, using sample data")
         news_items = _get_sample_news(query, time_window, language)
 
-    logger.info("News search completed", total_results=len(news_items))
+    logger.info(f"News search completed: total_results={len(news_items)}")
     return news_items[:max_results]
 
 
@@ -118,13 +119,13 @@ def _search_news_api(query: str, from_date: str, api_key: str, max_results: int)
         response.raise_for_status()
         data = response.json()
         articles = data.get("articles", [])
-        logger.info("News API search completed", article_count=len(articles))
+        logger.info(f"News API search completed: article_count={len(articles)}")
         return articles
     except requests.exceptions.HTTPError as e:
-        logger.error("News API HTTP error", status_code=e.response.status_code, error=str(e))
+        logger.error(f"News API HTTP error: status_code={e.response.status_code}, error={str(e)}")
         raise
     except Exception as e:
-        logger.error("News API error", error=str(e))
+        logger.error(f"News API error: {str(e)}")
         return []
 
 
@@ -164,13 +165,13 @@ def _search_naver_news(query: str, client_id: str, client_secret: str, max_resul
                 "content": item.get("description", "")
             })
 
-        logger.info("Naver News API search completed", article_count=len(articles))
+        logger.info(f"Naver News API search completed: article_count={len(articles)}")
         return articles
     except requests.exceptions.HTTPError as e:
-        logger.error("Naver News API HTTP error", status_code=e.response.status_code, error=str(e))
+        logger.error(f"Naver News API HTTP error: status_code={e.response.status_code}, error={str(e)}")
         raise
     except Exception as e:
-        logger.error("Naver News API error", error=str(e))
+        logger.error(f"Naver News API error: {str(e)}")
         return []
 
 
@@ -222,7 +223,7 @@ def analyze_sentiment(items: List[Dict[str, Any]]) -> Dict[str, Any]:
     Returns:
         감성 분석 결과 (긍정, 중립, 부정 개수)
     """
-    logger.info("Starting sentiment analysis", item_count=len(items))
+    logger.info(f"Starting sentiment analysis: item_count={len(items)}")
 
     # Simple keyword-based sentiment (production: use Azure OpenAI)
     positive_keywords = ["긍정", "성공", "성장", "증가", "호평", "positive", "success", "growth", "increase"]
@@ -256,7 +257,7 @@ def analyze_sentiment(items: List[Dict[str, Any]]) -> Dict[str, Any]:
         "negative_pct": (negative_count / total * 100) if total > 0 else 0
     }
 
-    logger.info("Sentiment analysis completed", result=result)
+    logger.info(f"Sentiment analysis completed: {result}")
     return result
 
 
@@ -270,7 +271,7 @@ def extract_keywords(items: List[Dict[str, Any]]) -> Dict[str, Any]:
     Returns:
         키워드 추출 결과 (상위 키워드, 빈도)
     """
-    logger.info("Starting keyword extraction", item_count=len(items))
+    logger.info(f"Starting keyword extraction: item_count={len(items)}")
 
     # Simple word frequency (production: use TF-IDF or LLM)
     word_freq = {}
@@ -298,7 +299,7 @@ def extract_keywords(items: List[Dict[str, Any]]) -> Dict[str, Any]:
         "total_unique_keywords": len(word_freq)
     }
 
-    logger.info("Keyword extraction completed", unique_keywords=len(word_freq))
+    logger.info(f"Keyword extraction completed: unique_keywords={len(word_freq)}")
     return result
 
 
@@ -310,7 +311,7 @@ def _get_llm():
     """
     provider = os.getenv("LLM_PROVIDER", "azure_openai").lower()
 
-    logger.info("Initializing LLM", provider=provider)
+    logger.info(f"Initializing LLM: provider={provider}")
 
     if provider == "azure_openai":
         return AzureChatOpenAI(
@@ -365,7 +366,7 @@ def summarize_trend(
     Returns:
         LLM이 생성한 트렌드 요약 텍스트
     """
-    logger.info("Starting trend summarization", query=query, item_count=len(normalized_items))
+    logger.info(f"Starting trend summarization: query={query}, item_count={len(normalized_items)}")
 
     sentiment = analysis.get("sentiment", {})
     keywords = analysis.get("keywords", {}).get("top_keywords", [])
@@ -377,9 +378,13 @@ def summarize_trend(
     keywords_str = ", ".join([kw["keyword"] for kw in keywords[:10]])
     headlines_str = "\n".join([f"- {headline}" for headline in top_headlines])
 
-    # Create prompt using LangChain ChatPromptTemplate (official pattern)
-    prompt = ChatPromptTemplate.from_messages([
-        ("system", """당신은 소비자 트렌드 분석 전문가입니다.
+    # Import prompts from prompts.py for better management
+    try:
+        from agents.news_trend_agent.prompts import get_system_prompt
+        system_prompt_text = get_system_prompt()
+    except ImportError:
+        logger.warning("Failed to import prompts.py, using default prompt")
+        system_prompt_text = """당신은 소비자 트렌드 분석 전문가입니다.
 주어진 뉴스 데이터를 분석하여 마케팅 및 상품 기획팀이 활용할 수 있는 핵심 인사이트를 제공하세요.
 
 응답 형식:
@@ -387,7 +392,11 @@ def summarize_trend(
 2. 주요 발견사항 (3-5개 bullet points)
 3. 실행 가능한 권고안 (3-5개 bullet points)
 
-명확하고 실용적인 분석을 제공하세요."""),
+명확하고 실용적인 분석을 제공하세요."""
+
+    # Create prompt using LangChain ChatPromptTemplate (official pattern)
+    prompt = ChatPromptTemplate.from_messages([
+        ("system", system_prompt_text),
         ("user", """다음 데이터를 분석해주세요:
 
 **검색어**: {query}
@@ -425,11 +434,11 @@ def summarize_trend(
             "headlines": headlines_str
         })
 
-        logger.info("Trend summarization completed", summary_length=len(summary))
+        logger.info(f"Trend summarization completed: summary_length={len(summary)}")
         return summary
 
     except Exception as e:
-        logger.error("Error in LLM summarization, falling back to simple summary", error=str(e))
+        logger.error(f"Error in LLM summarization, falling back to simple summary: {str(e)}")
 
         # Fallback to simple summary
         summary_lines = []

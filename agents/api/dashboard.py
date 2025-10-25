@@ -51,6 +51,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Include n8n routes
+from agents.api.n8n_routes import router as n8n_router
+app.include_router(n8n_router)
+
 # Global executor (initialized on startup)
 executor: Optional[DistributedAgentExecutor] = None
 
@@ -103,20 +107,25 @@ async def startup_event():
     # 에이전트 실행 함수 정의
     async def execute_agent(agent_name: str, query: str, params: Dict[str, Any]) -> Dict[str, Any]:
         """에이전트 실행 및 결과 반환"""
-        from agents.news_trend_agent.graph import run_agent
+        if agent_name == "news_trend_agent":
+            from agents.news_trend_agent.graph import run_agent
+        elif agent_name == "viral_video_agent":
+            from agents.viral_video_agent.graph import run_agent
+        else:
+            raise ValueError(f"Unknown agent: {agent_name}")
 
         # 에이전트 실행
         result = run_agent(query=query, **params)
 
-        # JSON 직렬화를 위해 딕셔너리로 변환
+        # JSON 직렬화를 위해 딕셔너리로 변환 (dict로 반환됨)
         return {
-            "query": result.query,
-            "time_window": result.time_window,
-            "language": result.language,
-            "report_md": result.report_md,
-            "analysis": result.analysis,
-            "metrics": result.metrics,
-            "run_id": result.run_id
+            "query": result.get("query"),
+            "time_window": result.get("time_window"),
+            "language": result.get("language"),
+            "report_md": result.get("report_md"),
+            "analysis": result.get("analysis"),
+            "metrics": result.get("metrics"),
+            "run_id": result.get("run_id")
         }
 
     # 실행기 생성
