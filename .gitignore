@@ -64,10 +64,24 @@ logs/
 # Docker
 docker-compose.override.yml
 
-# Node
+# Node / TypeScript (for future use)
 node_modules/
 .npm
 .pnpm-debug.log*
+dist/
+*.tsbuildinfo
+.eslintcache
+
+# Removed TypeScript/Hybrid files (historical reference)
+# HYBRID_ARCHITECTURE.md
+# README.HYBRID.md
+# MIGRATION_GUIDE.md
+# QUICKSTART.ts.md
+# TYPESCRIPT_VERSION.md
+# README.ts.md
+# docker-compose.hybrid.yaml
+# docker-compose.ts.yaml
+# src/
 
 # Cache directories
 backend/data/

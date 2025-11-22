@@ -1,0 +1,354 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "title": "System Overview",
+      "type": "row",
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 0}
+    },
+    {
+      "title": "Active Jobs",
+      "type": "stat",
+      "gridPos": {"h": 4, "w": 6, "x": 0, "y": 1},
+      "targets": [
+        {
+          "expr": "sum(active_jobs)",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "steps": [
+              {"value": 0, "color": "green"},
+              {"value": 10, "color": "yellow"},
+              {"value": 20, "color": "red"}
+            ]
+          }
+        }
+      }
+    },
+    {
+      "title": "Total API Requests (1h)",
+      "type": "stat",
+      "gridPos": {"h": 4, "w": 6, "x": 6, "y": 1},
+      "targets": [
+        {
+          "expr": "sum(increase(api_requests_total[1h]))",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "title": "LLM Requests (1h)",
+      "type": "stat",
+      "gridPos": {"h": 4, "w": 6, "x": 12, "y": 1},
+      "targets": [
+        {
+          "expr": "sum(increase(llm_requests_total[1h]))",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "title": "Error Rate",
+      "type": "gauge",
+      "gridPos": {"h": 4, "w": 6, "x": 18, "y": 1},
+      "targets": [
+        {
+          "expr": "sum(rate(api_requests_total{status='error'}[5m])) / sum(rate(api_requests_total[5m])) * 100",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "max": 100,
+          "thresholds": {
+            "steps": [
+              {"value": 0, "color": "green"},
+              {"value": 5, "color": "yellow"},
+              {"value": 10, "color": "red"}
+            ]
+          }
+        }
+      }
+    },
+    {
+      "title": "LLM Metrics",
+      "type": "row",
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 5}
+    },
+    {
+      "title": "LLM Request Rate",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 6},
+      "targets": [
+        {
+          "expr": "sum(rate(llm_requests_total[5m])) by (provider, model)",
+          "legendFormat": "{{provider}}/{{model}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "title": "LLM Request Duration (p99)",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 6},
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.99, sum(rate(llm_request_duration_seconds_bucket[5m])) by (le, provider, model))",
+          "legendFormat": "{{provider}}/{{model}} p99",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        }
+      }
+    },
+    {
+      "title": "Token Usage (1h)",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 14},
+      "targets": [
+        {
+          "expr": "sum(increase(llm_tokens_total[1h])) by (provider, model, token_type)",
+          "legendFormat": "{{provider}}/{{model}} {{token_type}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "title": "LLM Cost (USD/hour)",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 14},
+      "targets": [
+        {
+          "expr": "sum(increase(llm_cost_total[1h])) by (provider, model)",
+          "legendFormat": "{{provider}}/{{model}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD"
+        }
+      }
+    },
+    {
+      "title": "Agent Metrics",
+      "type": "row",
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 22}
+    },
+    {
+      "title": "Agent Run Rate",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 23},
+      "targets": [
+        {
+          "expr": "sum(rate(agent_runs_total[5m])) by (agent_name, status)",
+          "legendFormat": "{{agent_name}} ({{status}})",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "title": "Agent Execution Duration (p95)",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 23},
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(agent_run_duration_seconds_bucket[5m])) by (le, agent_name))",
+          "legendFormat": "{{agent_name}} p95",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        }
+      }
+    },
+    {
+      "title": "Vector Store Metrics",
+      "type": "row",
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 31}
+    },
+    {
+      "title": "Vector Operations",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 32},
+      "targets": [
+        {
+          "expr": "sum(rate(vector_operations_total[5m])) by (operation, namespace)",
+          "legendFormat": "{{operation}} ({{namespace}})",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "title": "Retrieval Results Count",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 32},
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum(rate(retrieval_results_count_bucket[5m])) by (le, namespace))",
+          "legendFormat": "{{namespace}} median",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "title": "Cache & Rate Limiting",
+      "type": "row",
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 40}
+    },
+    {
+      "title": "Cache Hit Ratio",
+      "type": "gauge",
+      "gridPos": {"h": 8, "w": 8, "x": 0, "y": 41},
+      "targets": [
+        {
+          "expr": "sum(rate(cache_operations_total{status='hit'}[5m])) / sum(rate(cache_operations_total[5m])) * 100",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "max": 100,
+          "thresholds": {
+            "steps": [
+              {"value": 0, "color": "red"},
+              {"value": 50, "color": "yellow"},
+              {"value": 80, "color": "green"}
+            ]
+          }
+        }
+      }
+    },
+    {
+      "title": "Rate Limit Hits",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 8, "x": 8, "y": 41},
+      "targets": [
+        {
+          "expr": "sum(rate(api_rate_limit_hits_total[5m])) by (service)",
+          "legendFormat": "{{service}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "title": "Queue Sizes",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 8, "x": 16, "y": 41},
+      "targets": [
+        {
+          "expr": "queue_size",
+          "legendFormat": "{{queue_name}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "title": "Workflow Metrics",
+      "type": "row",
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 49}
+    },
+    {
+      "title": "Workflow Items by Status",
+      "type": "piechart",
+      "gridPos": {"h": 8, "w": 8, "x": 0, "y": 50},
+      "targets": [
+        {
+          "expr": "sum(workflow_items_total) by (status)",
+          "legendFormat": "{{status}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "title": "Workflow Transitions",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 8, "x": 8, "y": 50},
+      "targets": [
+        {
+          "expr": "sum(rate(workflow_transitions_total[5m])) by (from_status, to_status)",
+          "legendFormat": "{{from_status}} → {{to_status}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "title": "Review Duration (median)",
+      "type": "stat",
+      "gridPos": {"h": 8, "w": 8, "x": 16, "y": 50},
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum(rate(workflow_review_duration_seconds_bucket[1h])) by (le))",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        }
+      }
+    },
+    {
+      "title": "Data Collection",
+      "type": "row",
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 58}
+    },
+    {
+      "title": "Items Collected",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 59},
+      "targets": [
+        {
+          "expr": "sum(rate(items_collected_total[5m])) by (source)",
+          "legendFormat": "{{source}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "title": "Duplicates Detected",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 59},
+      "targets": [
+        {
+          "expr": "sum(rate(duplicates_detected_total[5m])) by (source)",
+          "legendFormat": "{{source}}",
+          "refId": "A"
+        }
+      ]
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 38,
+  "tags": ["social-trend-agent", "prometheus"],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "",
+  "title": "Social Trend Agent Dashboard",
+  "uid": "social-trend-agent",
+  "version": 1
+}

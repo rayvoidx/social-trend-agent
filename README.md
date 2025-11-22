@@ -1,488 +1,472 @@
-# 🤖 AI 트렌드 분석 에이전트 시스템
+# Social Trend Agent
 
-> **실전 에이전트 빌더의 포트폴리오 - 즉시 배포 가능한 프로덕션급 멀티 에이전트 시스템**
-
-뉴스·SNS·동영상 채널의 트렌드를 **자동 수집·분석·요약**하여 마케팅·상품기획 의사결정을 지원하는 **LangGraph 기반 멀티 에이전트 시스템**입니다.
+뉴스, 영상, 소셜 미디어 전반의 자동화된 트렌드 분석을 위한 프로덕션 레디 멀티 에이전트 시스템.
 
 [![Python](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/)
-[![LangGraph](https://img.shields.io/badge/LangGraph-Latest-orange.svg)](https://langchain-ai.github.io/langgraph/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-4.0-green.svg)](https://fastapi.tiangolo.com/)
-[![Docker](https://img.shields.io/badge/Docker-Ready-blue.svg)](https://www.docker.com/)
-[![MCP](https://img.shields.io/badge/MCP-Compatible-purple.svg)](https://modelcontextprotocol.io/)
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![LangGraph](https://img.shields.io/badge/LangGraph-0.2+-orange.svg)](https://langchain-ai.github.io/langgraph/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.115-green.svg)](https://fastapi.tiangolo.com/)
 
----
+## 개요
 
-## ⚡ 핵심 차별점
+LangGraph 기반 AI 오케스트레이션 시스템으로, 트렌드 감지 및 분석을 자동화합니다. 다양한 소스에서 데이터를 수집하고, 감성 분석 및 키워드 추출을 수행하며, LLM을 활용하여 실행 가능한 인사이트를 생성합니다.
 
-### 1. 즉시 사용 가능한 실전 도구
-- ✅ **MCP 서버 구현**: Claude Desktop에서 바로 사용 가능
-- ✅ **n8n 워크플로우**: 5가지 실전 자동화 예제 제공
-- ✅ **FastAPI 대시보드**: 실시간 모니터링 및 제어
-- ✅ **폴백 처리**: API 키 없어도 샘플 데이터로 동작
+## 아키텍처
 
-### 2. 프로덕션 레벨 아키텍처
-- 🏗️ **LangGraph 패턴**: 공식 문서 기반 표준 구현
-- 🔄 **에러 핸들링**: 재시도, 부분 결과, 안전한 API 호출
-- 📊 **구조화된 로깅**: JSON 로그, run_id 추적
-- 🚀 **분산 실행**: 4-워커 병렬 처리
+```
+┌─────────────────────────────────────────────────┐
+│               FastAPI Server (:8000)            │
+├─────────────────────────────────────────────────┤
+│  ┌───────────┐ ┌───────────┐ ┌───────────┐     │
+│  │   News    │ │   Video   │ │  Social   │     │
+│  │   Agent   │ │   Agent   │ │   Agent   │     │
+│  └─────┬─────┘ └─────┬─────┘ └─────┬─────┘     │
+│        └─────────────┼─────────────┘           │
+│                      ▼                          │
+│  ┌──────────────────────────────────────┐      │
+│  │    LangGraph State Machine           │      │
+│  │  collect → normalize → analyze →     │      │
+│  │  summarize → report                  │      │
+│  └──────────────────────────────────────┘      │
+│                      │                          │
+│  ┌────────┬──────────┼──────────┬────────┐     │
+│  │  MCP   │   LLM    │  Vector  │ Cache  │     │
+│  │Servers │  Client  │  Store   │        │     │
+│  └────────┴──────────┴──────────┴────────┘     │
+└─────────────────────────────────────────────────┘
+```
 
-### 3. 뛰어난 프롬프트 엔지니어링
-- 📝 **Few-Shot 예제**: 실제 출력 예시 포함
-- 🎯 **증거 기반 분석**: 추측 금지, 데이터 우선
-- 🔍 **실행 가능한 인사이트**: "무엇을 해야 하는가" 명확히 제시
+## 빠른 시작
 
-## 🎬 데모 영상 (5분 안에 이해하기)
+### 필수 요구사항
+
+- Python 3.11+
+- API 키 (OpenAI/Anthropic/Google + 데이터 소스)
+
+### 설치
 
 ```bash
-# 1. 뉴스 트렌드 분석 (15초 만에 실행)
-python scripts/run_agent.py --agent news_trend_agent --query "AI" --window 7d
+git clone https://github.com/your-repo/social-trend-agent.git
+cd social-trend-agent
 
-# 2. MCP로 Claude Desktop 연동 (5분 설정)
-# automation/mcp/QUICKSTART.md 참고
+# uv로 설치 (권장)
+uv sync
 
-# 3. n8n 자동화 (복사 & 붙여넣기)
-# automation/n8n/REAL_WORLD_EXAMPLES.md 참고
-```
-
-**실행 결과 예시:**
-```
-✅ 분석 완료 (12.3초)
-📊 감성: 긍정 72% | 중립 20% | 부정 8%
-🔑 키워드: ChatGPT, 생성형AI, 자동화, 일자리, 혁신
-💡 인사이트: AI 에이전트 도입 기업 생산성 30% 향상
-📄 리포트: artifacts/news_trend_agent/run_abc123.md
-```
-
----
-
-## 🎯 주요 기능
-
-### 데이터 수집 & 분석
-- 🔍 **자동 데이터 수집**: NewsAPI, Naver News, YouTube (API 키 없으면 샘플 데이터로 fallback)
-- 💭 **감성 분석**: 긍정/부정/중립 자동 분류 + 지배적 감성 해석
-- 🔑 **키워드 추출**: TF-IDF 기반 핵심 키워드 추출
-- 🔥 **바이럴 탐지**: Z-Score 기반 통계적 급상승 감지
-- 📊 **품질 메트릭**: 커버리지, 사실성, 실행 가능성 자동 평가
-
-### 자동화 & 통합
-- 🤖 **MCP 서버**: Claude Desktop, Cursor 등에서 도구로 사용
-- 🔄 **n8n 워크플로우**: 일일 브리핑, 경쟁사 모니터링, 바이럴 알림
-- 🚀 **FastAPI 대시보드**: 실시간 모니터링, WebSocket 스트리밍
-- 📢 **알림 연동**: Slack, Email, n8n 웹훅
-
-### 프로덕션 기능
-- 🔁 **재시도 로직**: 지수 백오프, 부분 결과 처리
-- 💾 **캐싱**: TTL 기반 결과 캐싱
-- 📝 **구조화된 로깅**: JSON 로그, run_id 추적
-- 🔐 **에러 핸들링**: 안전한 API 호출, 예외 처리
-
----
-
-## 🗂 에이전트 구성
-
-| 에이전트 | 기능 | 주요 출력 | 사용 사례 |
-|---------|------|----------|----------|
-| **news_trend_agent** | 뉴스 트렌드 분석 | 감성 분석 + 키워드 + 인사이트 | 경쟁사 모니터링, 시장 조사, 상품 기획 |
-| **viral_video_agent** | 바이럴 영상 탐지 | 급상승 랭킹 + 성공 요인 | 콘텐츠 전략, 크리에이터 발굴, 마케팅 |
-
----
-
-## 🏗 시스템 아키텍처
-
-```
-┌──────────────┐  ┌──────────────┐  ┌──────────────┐
-│  CLI Runner  │  │  n8n Webhook │  │  API Server  │
-│  (scripts/)  │  │  (Automation)│  │  (Optional)  │
-└──────┬───────┘  └──────┬───────┘  └──────┬───────┘
-       │                 │                 │
-       └─────────────────┴─────────────────┘
-                         │
-       ┌─────────────────▼─────────────────┐
-       │   LangGraph Orchestration         │
-       │  collect → normalize → analyze    │
-       │  → summarize → report → notify    │
-       └─────────────────┬─────────────────┘
-                         │
-       ┌─────────────────▼─────────────────┐
-       │   Agents (news / viral video)     │
-       └─────────────────┬─────────────────┘
-                         │
-       ┌─────────────────▼─────────────────┐
-       │   Shared Utilities                │
-       │   retry / cache / logging /       │
-       │   error_handling                  │
-       └─────────────────┬─────────────────┘
-                         │
-       ┌─────────────────▼─────────────────┐
-       │   External Services               │
-       │   NewsAPI / Naver / YouTube       │
-       │   Azure OpenAI / Slack / n8n      │
-       └───────────────────────────────────┘
-```
-
----
-
-## ⚙️ 빠른 시작 (3분)
-
-### 1단계: 설치
-
-```bash
-# 레포지토리 클론
-git clone https://github.com/rayvoidx/Automatic-Consumer-Trend-Analysis-Agent.git
-cd Automatic-Consumer-Trend-Analysis-Agent
-
-# 의존성 설치
+# 또는 pip
 pip install -r requirements.txt
-
-# 또는 uv 사용 (더 빠름)
-uv pip install -r requirements.txt
 ```
 
-### 2단계: API 키 설정 (필수)
+### 환경 설정
 
 ```bash
-# .env 파일 생성
 cp .env.example .env
-
-# .env 파일 편집하여 OpenAI API 키 추가
-# LLM_PROVIDER=openai
-# OPENAI_API_KEY=sk-your-openai-api-key-here
-# OPENAI_MODEL_NAME=gpt-4o
 ```
 
-**🔑 OpenAI API 키 발급:**
-1. https://platform.openai.com/api-keys 접속
-2. "Create new secret key" 클릭
-3. 생성된 키를 `.env` 파일의 `OPENAI_API_KEY`에 입력
+필수 환경 변수:
 
-**💡 Tip**: API 키 없이도 샘플 데이터로 테스트 가능하지만, LLM 요약 기능은 제한됩니다.
+```env
+# LLM Provider (하나 선택)
+LLM_PROVIDER=openai
+OPENAI_API_KEY=sk-...
 
-### 3단계: 실행
+# 데이터 소스
+BRAVE_API_KEY=...              # MCP를 통한 뉴스/웹 검색
+SUPADATA_API_KEY=...           # TikTok/YouTube/X 자막
+
+# 선택사항
+YOUTUBE_API_KEY=...            # YouTube Data API
+PINECONE_API_KEY=...           # Vector store
+```
+
+### 실행
 
 ```bash
-# main.py를 사용한 실행 (권장)
-python main.py --agent news_trend_agent --query "AI" --window 7d
+# CLI 모드
+python main.py --agent news_trend_agent --query "AI 트렌드" --window 7d
 
-# 바이럴 비디오 분석
-python main.py --agent viral_video_agent --query "K-pop" --market KR
-
-# 또는 기존 방식
-python scripts/run_agent.py --agent news_trend_agent --query "AI" --window 7d
+# Web 모드 (API + 대시보드)
+python main.py --mode web
+# API: http://localhost:8000
+# 문서: http://localhost:8000/docs
 ```
 
-**실행 결과:**
-```
-🤖 AI Trend Analysis Agent
-   Powered by OpenAI GPT-4
+## 에이전트
 
-🔍 Validating environment configuration...
-🤖 LLM Provider: openai
-✅ OpenAI configured: gpt-4o
-🔑 API Key: sk-proj-ab...xyz
+### News Trend Agent
 
-🚀 Starting News Trend Agent...
-✅ Analysis completed successfully
-
-📊 ANALYSIS RESULTS
-================================================================================
-🔍 Query: AI
-📅 Time Window: 7d
-📰 Items Analyzed: 18
-
-💭 Sentiment Analysis:
-   Positive: 12 (67.0%)
-   Neutral:  4 (22.0%)
-   Negative: 2 (11.0%)
-
-🔑 Top Keywords:
-   1. ChatGPT (28 times)
-   2. 생성형AI (25 times)
-   3. 자동화 (18 times)
-
-📄 Full Report: artifacts/news_trend_agent/run_abc123.md
-📊 Metrics JSON: artifacts/news_trend_agent/run_abc123_metrics.json
-================================================================================
-```
-
----
-
-## 🚀 고급 사용법
-
-### Docker로 실행 (권장)
+뉴스 보도량, 감성 분포를 분석하고 주요 토픽을 추출합니다.
 
 ```bash
-# 전체 스택 실행 (API + 에이전트)
-docker compose up -d --build
-
-# API 서버 접속
-open http://localhost:8000/docs
+python main.py --agent news_trend_agent \
+  --query "전기자동차" \
+  --window 7d \
+  --language ko
 ```
 
-### FastAPI 대시보드
+**데이터 소스**: Brave Search API, NewsAPI, 네이버 뉴스
+
+**출력**: 감성 비율, 빈도 포함 키워드, LLM 생성 인사이트
+
+### Viral Video Agent
+
+조회수/참여도 급증 감지를 통해 바이럴 콘텐츠 패턴을 탐지합니다.
 
 ```bash
-# API 서버 시작
-uvicorn agents.api.dashboard:app --reload --port 8000
+python main.py --agent viral_video_agent \
+  --query "K-pop" \
+  --market KR
+```
 
-# 브라우저에서 열기
-open http://localhost:8000/docs
+**데이터 소스**: YouTube Data API, Supadata MCP (자막)
 
+**출력**: 급증 감지, 성공 요인, 토픽 클러스터
+
+### Social Trend Agent
+
+여러 플랫폼의 소셜 대화를 모니터링합니다.
+
+```bash
+python main.py --agent social_trend_agent \
+  --query "브랜드명" \
+  --sources x instagram naver_blog
+```
+
+**데이터 소스**: X (Twitter), Instagram, 네이버 블로그, RSS
+
+**출력**: 소비자 목소리, 인플루언서 식별, 참여 통계
+
+## 프로젝트 구조
+
+```
+src/
+├── agents/                    # 에이전트 구현
+│   ├── news_trend/           # 뉴스 분석
+│   │   ├── graph.py          # LangGraph StateGraph
+│   │   ├── tools.py          # 데이터 수집 및 분석
+│   │   └── prompts.py        # 시스템 프롬프트
+│   ├── viral_video/          # 영상 트렌드 감지
+│   └── social_trend/         # 소셜 모니터링
+├── api/                      # FastAPI 서버
+│   └── routes/
+│       ├── dashboard.py      # 메인 API 라우트
+│       └── n8n.py            # 웹훅 연동
+├── core/                     # 핵심 유틸리티
+│   ├── state.py              # Pydantic 상태 모델
+│   ├── config.py             # 설정 관리
+│   ├── errors.py             # 에러 처리 및 부분 결과
+│   └── logging.py            # 구조화된 로깅
+├── infrastructure/           # 프로덕션 인프라
+│   ├── cache.py              # TTL 기반 캐싱
+│   ├── retry.py              # 지수 백오프
+│   ├── distributed.py        # 태스크 큐 및 워커
+│   └── monitoring/           # Prometheus 메트릭
+├── integrations/             # 외부 서비스
+│   ├── llm/                  # 멀티 프로바이더 LLM 클라이언트
+│   ├── mcp/                  # MCP 서버 (Brave, Supadata)
+│   ├── retrieval/            # Vector 스토어 (Pinecone)
+│   └── social/               # 플랫폼 클라이언트
+└── domain/                   # 비즈니스 모델
+
+apps/web/                     # React 프론트엔드
+config/                       # YAML 설정
+artifacts/                    # 생성된 리포트
+```
+
+## API
+
+### 엔드포인트
+
+| 메소드 | 경로 | 설명 |
+|--------|------|------|
+| POST | `/api/tasks` | 분석 태스크 제출 |
+| GET | `/api/tasks/{id}` | 태스크 상태/결과 조회 |
+| GET | `/api/health` | 헬스 체크 |
+| WS | `/ws/metrics` | 실시간 메트릭 |
+
+### 예시
+
+```bash
 # 태스크 제출
 curl -X POST http://localhost:8000/api/tasks \
   -H "Content-Type: application/json" \
-  -d '{"agent_name": "news_trend_agent", "query": "AI", "params": {"time_window": "7d"}}'
+  -d '{
+    "agent_name": "news_trend_agent",
+    "query": "AI 트렌드",
+    "params": {"time_window": "7d"}
+  }'
+
+# 응답
+{"task_id": "abc-123", "status": "pending"}
+
+# 결과 조회
+curl http://localhost:8000/api/tasks/abc-123
 ```
 
-### MCP 서버 (Claude Desktop 연동)
+## 설정
+
+### 에이전트 설정
+
+`config/default.yaml`:
+
+```yaml
+agents:
+  news_trend_agent:
+    timeout_seconds: 0          # 타임아웃 없음 (무제한)
+    max_concurrent_tasks: 10
+    llm:
+      provider: openai
+      model_name: gpt-4o
+      temperature: 0.5
+    embedding:
+      provider: openai
+      model_name: text-embedding-3-large
+    vector_store:
+      type: pinecone
+      index_name: news-trend-index
+
+  viral_video_agent:
+    llm:
+      provider: google
+      model_name: gemini-1.5-pro
+
+  social_trend_agent:
+    llm:
+      provider: anthropic
+      model_name: claude-3-5-sonnet-20241022
+```
+
+### MCP 서버
+
+`src/integrations/mcp/mcp_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "brave-search": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-brave-search"],
+      "env": {"BRAVE_API_KEY": "${BRAVE_API_KEY}"}
+    },
+    "supadata-ai-mcp": {
+      "command": "npx",
+      "args": ["-y", "@supadata/mcp"],
+      "env": {"SUPADATA_API_KEY": "${SUPADATA_API_KEY}"}
+    }
+  }
+}
+```
+
+**Supadata MCP 도구**:
+- `supadata_transcript` - 영상 자막 추출 (YouTube, TikTok, Instagram, X)
+- `supadata_scrape` - 웹 콘텐츠를 마크다운으로 변환
+- `supadata_map` - 웹사이트 URL 매핑
+- `supadata_crawl` - 전체 사이트 크롤링
+
+## 환경 변수
+
+| 변수 | 필수 | 설명 |
+|------|------|------|
+| `LLM_PROVIDER` | Yes | openai, anthropic, google, ollama |
+| `OPENAI_API_KEY` | OpenAI 사용시 | OpenAI API 키 |
+| `ANTHROPIC_API_KEY` | Anthropic 사용시 | Claude API 키 |
+| `GOOGLE_API_KEY` | Google 사용시 | Gemini API 키 |
+| `BRAVE_API_KEY` | 권장 | 뉴스/웹 검색 |
+| `SUPADATA_API_KEY` | 권장 | MCP를 통한 SNS 데이터 |
+| `YOUTUBE_API_KEY` | 선택 | YouTube Data API |
+| `PINECONE_API_KEY` | 선택 | Vector store |
+| `DATABASE_URL` | 선택 | PostgreSQL |
+| `REDIS_URL` | 선택 | Cache |
+
+## 기능
+
+### 멀티 프로바이더 LLM
+
+```python
+from src.integrations.llm import get_llm_client
+
+# config/default.yaml에서 자동 로드
+llm = get_llm_client(agent_name="news_trend_agent")
+response = llm.invoke(prompt)
+embeddings = llm.get_embeddings_batch(texts)
+```
+
+**지원**: OpenAI, Anthropic, Google Gemini, Azure OpenAI, Ollama
+
+### 우아한 저하 (Graceful Degradation)
+
+```python
+from src.core.errors import safe_api_call, PartialResult
+
+# API 실패 시에도 부분 결과로 계속 진행
+result = PartialResult()
+items = safe_api_call(
+    "fetch_news",
+    fetch_function,
+    fallback_value=[],
+    result_container=result
+)
+```
+
+### 캐싱 및 재시도
+
+```python
+from src.infrastructure.cache import cached
+from src.infrastructure.retry import backoff_retry
+
+@cached(ttl=3600)
+@backoff_retry(max_retries=3, backoff_base=2.0)
+def expensive_operation():
+    ...
+```
+
+### 분산 실행
+
+```python
+from src.infrastructure.distributed import DistributedAgentExecutor
+
+executor = DistributedAgentExecutor(num_workers=4)
+task_id = await executor.submit_task(
+    agent_name="news_trend_agent",
+    query="AI",
+    priority=TaskPriority.HIGH
+)
+result = await executor.wait_for_result(task_id)
+```
+
+## 출력
+
+리포트는 `artifacts/{agent_name}/{run_id}.md`에 저장됩니다:
+
+```markdown
+# 뉴스 트렌드 분석 리포트
+
+## 요약
+산업 전반에서 AI 도입이 가속화되고 있습니다...
+
+## 감성 분석
+- 긍정: 45%
+- 중립: 40%
+- 부정: 15%
+
+## 주요 키워드
+1. 인공지능 (42)
+2. 머신러닝 (28)
+3. 자동화 (18)
+
+## 핵심 인사이트
+1. 기업 도입 증가
+2. 규제 우려 대두
+
+## 권장 조치
+1. 경쟁사 AI 계획 모니터링
+2. 내부 활용 사례 평가
+```
+
+## 개발
+
+### 테스트
 
 ```bash
-# 5분 설정 가이드
-cat automation/mcp/QUICKSTART.md
+# 유닛 테스트
+pytest tests/unit/ -v
 
-# MCP 서버 수동 실행 (테스트)
-python automation/mcp/mcp_server.py
+# 통합 테스트
+pytest tests/integration/ -v
+
+# 특정 테스트
+pytest tests/unit/test_mcp_servers.py -v
 ```
 
-### n8n 자동화
+### 프론트엔드
 
 ```bash
-# n8n 설치
-docker run -it --rm --name n8n -p 5678:5678 -v ~/.n8n:/home/node/.n8n n8nio/n8n
-
-# 워크플로우 임포트
-# http://localhost:5678 접속 후 automation/n8n/*.json 파일 임포트
+cd apps/web
+npm install
+npm run dev
+# http://localhost:5173
 ```
 
----
+## 배포
 
-## 📚 실전 사용 사례
-
-### 1. 틱톡 크리에이터 - 바이럴 콘텐츠 전략
-```bash
-# 현재 바이럴 트렌드 파악
-python scripts/run_agent.py --agent viral_video_agent --query "뷰티 메이크업" --market KR --platform tiktok --window 24h
-```
-**결과**: 급상승 비디오 8개 감지, 평균 증가율 420%, 성공 요인 3가지 제시  
-**활용**: 다음 영상 기획 시 "5분 메이크업" 콘셉트 적용 → 조회수 1.2M 달성
-
-### 2. 스타트업 마케터 - 경쟁사 모니터링
-```bash
-# n8n으로 6시간마다 자동 실행
-# 부정 감성 30% 이상 시 Slack 알림
-```
-**결과**: 경쟁사 부정 이슈 발생 6시간 내 감지  
-**활용**: 즉시 "안전 인증" 마케팅 캠페인 실행 → 브랜드 검색량 +40%
-
-### 3. 상품기획자 - 신제품 아이디어 발굴
-```bash
-# 여러 키워드 동시 분석
-python scripts/run_agent.py --agent news_trend_agent --query "비건,단백질,저탄수화물" --window 30d
-```
-**결과**: "비건 단백질" 검색량 +120% 증가, 주요 니즈 파악  
-**활용**: "맛있는 비건 프로틴 바" 개발 → 첫 달 매출 5억원
-
-### 4. 인플루언서 에이전시 - 크리에이터 발굴
-```bash
-# 매일 자동 실행, 급상승 크리에이터 감지
-python scripts/run_agent.py --agent viral_video_agent --query "뷰티,패션" --spike-threshold 2.5
-```
-**결과**: 팔로워 8천명 신인 크리에이터 발굴 (조회수 +800%)  
-**활용**: 조기 계약 → 6개월 후 50만 팔로워 성장
-
-**더 많은 사례**: [docs/REAL_WORLD_USE_CASES.md](docs/REAL_WORLD_USE_CASES.md)
-
----
-
-## 📁 프로젝트 구조
-
-```
-.
-├── agents/                          # 🤖 에이전트 구현
-│   ├── news_trend_agent/            # 뉴스 트렌드 분석
-│   │   ├── graph.py                 # LangGraph 정의
-│   │   ├── graph_advanced.py        # 고급 기능 (조건부 엣지, 병렬 실행)
-│   │   ├── tools.py                 # 데이터 수집 도구
-│   │   ├── prompts/system.md        # 시스템 프롬프트 (Few-Shot 예제 포함)
-│   │   └── tests/                   # 유닛 테스트
-│   ├── viral_video_agent/           # 바이럴 비디오 분석
-│   │   ├── graph.py                 # LangGraph 정의
-│   │   ├── tools.py                 # 바이럴 감지 도구
-│   │   ├── prompts/system.md        # 시스템 프롬프트
-│   │   └── tests/                   # 유닛 테스트
-│   ├── shared/                      # 🔧 공유 유틸리티
-│   │   ├── error_handling.py        # 재시도, 부분 결과 처리
-│   │   ├── logging.py               # 구조화된 JSON 로깅
-│   │   ├── cache.py                 # TTL 기반 캐싱
-│   │   ├── distributed.py           # 분산 실행 (4-워커)
-│   │   ├── monitoring.py            # 성능 메트릭
-│   │   └── evaluation.py            # 품질 평가
-│   └── api/                         # 🚀 FastAPI 대시보드
-│       ├── dashboard.py             # API 엔드포인트
-│       └── README.md                # API 문서
-├── automation/                      # ⚙️ 자동화
-│   ├── mcp/                         # MCP 서버
-│   │   ├── mcp_server.py            # MCP 구현 (Claude Desktop 연동)
-│   │   ├── mcp_config.json          # MCP 설정
-│   │   ├── QUICKSTART.md            # 5분 설정 가이드
-│   │   └── README.md                # 상세 문서
-│   └── n8n/                         # n8n 워크플로우
-│       ├── news_daily_report.json   # 일일 브리핑
-│       ├── viral_spike_alert.json   # 바이럴 알림
-│       └── REAL_WORLD_EXAMPLES.md   # 5가지 실전 예제
-├── backend/                         # 🔌 확장 모듈
-│   └── extension_modules/
-│       ├── mcp_runtime/             # MCP 클라이언트
-│       └── utils/model.py           # 멀티 LLM 지원
-├── docs/                            # 📚 문서
-│   └── REAL_WORLD_USE_CASES.md      # 6가지 실전 사용 사례
-├── scripts/                         # 🎬 실행 스크립트
-│   └── run_agent.py                 # CLI 러너
-├── artifacts/                       # 📊 분석 결과 저장
-├── logs/                            # 📝 로그 파일
-├── tests/                           # 🧪 통합 테스트
-├── docker-compose.yaml              # 🐳 Docker 설정
-├── Dockerfile                       # 컨테이너 이미지
-├── requirements.txt                 # Python 의존성 (45개)
-├── pyproject.toml                   # 프로젝트 메타데이터
-├── .env.example                     # 환경 변수 템플릿
-└── README.md                        # 이 파일
-```
-
----
-
-## 🔑 환경 변수
-
-### 최소 설정 (OpenAI만 - 권장)
+### Docker
 
 ```bash
-# .env 파일
+# 이미지 빌드
+docker build -t social-trend-agent .
+
+# 컨테이너 실행
+docker run -p 8000:8000 --env-file .env social-trend-agent
+```
+
+### Docker Compose
+
+전체 스택 (API + Redis + 모니터링):
+
+```bash
+# 전체 스택 시작
+docker-compose up -d
+
+# 로그 확인
+docker-compose logs -f api
+
+# 중지
+docker-compose down
+```
+
+#### 서비스 구성
+
+| 서비스 | 포트 | 설명 |
+|--------|------|------|
+| `api` | 8000 | FastAPI 메인 서버 |
+| `redis` | 6379 | 캐시 및 세션 스토리지 |
+| `prometheus` | 9090 | 메트릭 수집 |
+
+#### 환경 변수 설정
+
+`.env` 파일 생성:
+
+```env
+# 필수
 LLM_PROVIDER=openai
-OPENAI_API_KEY=sk-your-openai-api-key-here
-OPENAI_MODEL_NAME=gpt-4o
+OPENAI_API_KEY=sk-...
+BRAVE_API_KEY=...
+SUPADATA_API_KEY=...
 
-# 이것만으로 실행 가능! (나머지는 샘플 데이터 사용)
+# 선택
+REDIS_URL=redis://redis:6379
+DATABASE_URL=postgresql://user:pass@db:5432/trends
 ```
 
-### 전체 설정 (프로덕션)
+#### 프로덕션 배포
 
 ```bash
-# LLM 제공자 (기본: openai)
-LLM_PROVIDER=openai
+# 프로덕션 모드로 빌드 및 실행
+docker-compose -f docker-compose.yaml up -d --build
 
-# OpenAI (기본 설정)
-OPENAI_API_KEY=sk-your-key-here
-OPENAI_MODEL_NAME=gpt-4o  # 또는 gpt-4-turbo, gpt-4, gpt-3.5-turbo
-
-# Azure OpenAI (기업용)
-# LLM_PROVIDER=azure_openai
-# OPENAI_API_TYPE=azure
-# OPENAI_API_BASE=https://your-resource.openai.azure.com/
-# OPENAI_API_KEY=your-azure-key
-# OPENAI_DEPLOYMENT_NAME=gpt-4
+# 스케일링
+docker-compose up -d --scale api=3
 ```
 
-### 선택 설정
+## 기술 스택
 
-```bash
-# 데이터 소스 (없으면 샘플 데이터 사용)
-NEWS_API_KEY=
-NAVER_CLIENT_ID=
-NAVER_CLIENT_SECRET=
-YOUTUBE_API_KEY=
+| 컴포넌트 | 기술 |
+|----------|------|
+| 프레임워크 | FastAPI 0.115, LangGraph 0.2 |
+| LLM | OpenAI, Anthropic, Google Gemini |
+| 임베딩 | OpenAI, Voyage AI |
+| Vector DB | Pinecone |
+| MCP | Brave Search, Supadata |
+| 캐시 | In-memory, Redis |
+| 프론트엔드 | React 19, Vite, TailwindCSS |
+| 모니터링 | Prometheus |
 
-# 알림
-SLACK_WEBHOOK_URL=
-N8N_WEBHOOK_URL=
-```
+## 라이선스
 
----
+MIT
 
-## 📊 기술 스택
+## 기여
 
-### 핵심 프레임워크
-- **LangGraph** (0.2+): 에이전트 워크플로우 오케스트레이션
-- **LangChain** (0.3+): LLM 통합 및 체인 구성
-- **FastAPI** (4.0): REST API 및 WebSocket
-- **Pydantic** (2.11): 데이터 검증 및 설정 관리
-
-### LLM 지원
-- **Azure OpenAI**: 기업용 (권장)
-- **OpenAI**: GPT-4, GPT-3.5
-- **Anthropic**: Claude 3.5 Sonnet
-- **Google**: Gemini 1.5 Pro
-- **Ollama**: 로컬 LLM (Llama 3.2 등)
-
-### 자동화 & 통합
-- **MCP** (Model Context Protocol): Claude Desktop 연동
-- **n8n**: 워크플로우 자동화
-- **Docker**: 컨테이너화 및 배포
-
-### 데이터 소스
-- **NewsAPI**: 글로벌 뉴스
-- **Naver News**: 한국 뉴스
-- **YouTube Data API**: 비디오 분석
-
----
-
-## 🏆 프로젝트 하이라이트
-
-### 실전 에이전트 빌더로서의 역량 증명
-
-✅ **멀티 스킬**
-- 프롬프트 엔지니어링 (Few-Shot, 증거 기반)
-- 시스템 설계 (LangGraph, 분산 실행)
-- API 개발 (FastAPI, WebSocket)
-- 자동화 (n8n, MCP)
-
-✅ **실험과 실행 우선**
-- 즉시 실행 가능한 코드
-- 6가지 실전 사용 사례 문서화
-- 샘플 데이터로 API 키 없이도 테스트 가능
-
-✅ **프로덕션 레벨 품질**
-- 에러 핸들링 (재시도, 부분 결과)
-- 구조화된 로깅 (JSON, run_id 추적)
-- 품질 메트릭 (커버리지, 사실성, 실행 가능성)
-- 분산 실행 (4-워커 병렬 처리)
-
-✅ **도구 활용 능력**
-- n8n: 5가지 실전 워크플로우
-- MCP: Claude Desktop 연동 (5분 설정)
-- LangGraph: 공식 패턴 기반 구현
-- FastAPI: 실시간 대시보드
-
----
-
-## 📚 문서
-
-| 문서 | 설명 | 소요 시간 |
-|------|------|----------|
-| [MCP 빠른 시작](automation/mcp/QUICKSTART.md) | Claude Desktop 연동 | 5분 |
-| [n8n 실전 예제](automation/n8n/REAL_WORLD_EXAMPLES.md) | 5가지 자동화 워크플로우 | 10분 |
-| [실전 사용 사례](docs/REAL_WORLD_USE_CASES.md) | 6가지 비즈니스 시나리오 | 15분 |
-| [FastAPI 대시보드](agents/api/README.md) | API 문서 및 사용법 | 10분 |
-| [시스템 프롬프트](agents/news_trend_agent/prompts/system.md) | 프롬프트 엔지니어링 | 20분 |
-
----
-
-## 🤝 기여
-
-이슈 및 풀 리퀘스트 환영합니다!
-
----
-
-## 📝 라이선스
-
-MIT License - 자유롭게 사용, 수정, 배포 가능
-
----
-
-## 📧 연락처
-
-- **GitHub**: [@rayvoidx](https://github.com/rayvoidx)
-- **프로젝트**: [Automatic-Consumer-Trend-Analysis-Agent](https://github.com/rayvoidx/Automatic-Consumer-Trend-Analysis-Agent)
-
----
-
-**⭐ 이 프로젝트가 도움이 되었다면 Star를 눌러주세요!**
+1. 저장소 Fork
+2. Feature 브랜치 생성
+3. 변경사항 커밋
+4. 브랜치에 Push
+5. Pull Request 생성

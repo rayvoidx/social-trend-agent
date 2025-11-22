@@ -1,0 +1,9 @@
+---
+ignore: |
+  .github/workflows/*.yml
+  .github/workflows/*.yaml
+
+rules:
+  document-start: disable
+  truthy: disable
+

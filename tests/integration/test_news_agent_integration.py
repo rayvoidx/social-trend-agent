@@ -9,13 +9,13 @@ Tests complete end-to-end workflows including:
 """
 import pytest
 import asyncio
-from agents.news_trend_agent.graph import run_agent
-from agents.news_trend_agent.graph_advanced import (
+from src.agents.news_trend.graph import run_agent
+from src.agents.news_trend.graph_advanced import (
     run_agent_advanced,
     run_agent_with_streaming
 )
-from agents.shared.monitoring import PerformanceMonitor
-from agents.shared.evaluation import AgentEvaluator
+from src.infrastructure.monitoring import PerformanceMonitor
+from src.infrastructure.evaluation import AgentEvaluator
 
 
 class TestBasicPipeline:

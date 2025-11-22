@@ -1,0 +1,18 @@
+{
+  "mcpServers": {
+    "trend-analysis": {
+      "command": "uv",
+      "args": [
+        "--directory",
+        "/Users/jaehyun/Desktop/social-trend-agent",
+        "run",
+        "python",
+        "-m",
+        "src.integrations.mcp.trend_mcp_server"
+      ],
+      "env": {
+        "PYTHONPATH": "/Users/jaehyun/Desktop/social-trend-agent"
+      }
+    }
+  }
+}

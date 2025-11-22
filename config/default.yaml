@@ -1,0 +1,65 @@
+environment: development
+debug: true
+
+llm:
+  provider: openai
+  model_name: ${OPENAI_MODEL_NAME:-gpt-4o}
+  temperature: 0.7
+
+agents:
+  news_trend_agent:
+    name: news_trend_agent
+    enabled: true
+    max_concurrent_tasks: 10
+    timeout_seconds: 0
+    llm:
+      provider: openai
+      model_name: ${OPENAI_MODEL_NAME:-gpt-4o}
+      temperature: 0.5
+    embedding:
+      provider: openai
+      model_name: ${OPENAI_EMBEDDING_MODEL:-text-embedding-3-large}
+    vector_store:
+      type: pinecone
+      index_name: news-trend-index
+
+  viral_video_agent:
+    name: viral_video_agent
+    enabled: true
+    max_concurrent_tasks: 10
+    timeout_seconds: 0
+    llm:
+      provider: google
+      model_name: ${GEMINI_MODEL_NAME:-gemini-1.5-pro}
+      temperature: 0.6
+    embedding:
+      provider: google
+      model_name: ${GEMINI_EMBEDDING_MODEL_NAME:-models/embedding-001}
+    vector_store:
+      type: pinecone
+      index_name: viral-video-index
+
+  social_trend_agent:
+    name: social_trend_agent
+    enabled: true
+    max_concurrent_tasks: 10
+    timeout_seconds: 0
+    llm:
+      provider: anthropic
+      model_name: ${ANTHROPIC_MODEL_NAME:-claude-3-5-sonnet-20241022}
+      temperature: 0.5
+    embedding:
+      provider: voyage
+      model_name: voyage-3
+    vector_store:
+      type: pinecone
+      index_name: social-trend-index
+
+monitoring:
+  enabled: true
+  log_level: INFO
+  metrics_enabled: true
+
+rate_limit:
+  enabled: true
+  requests_per_minute: 60
