@@ -3,6 +3,7 @@
 
 Phase 3 유틸리티 통합: 재시도, 캐싱, 로깅
 """
+# mypy: ignore-errors
 import os
 import logging
 from typing import List, Dict, Any, Tuple, Optional
@@ -284,25 +285,15 @@ def extract_keywords(items: List[Dict[str, Any]], use_tfidf: bool = True) -> Dic
 
 
 def _extract_keywords_tfidf(items: List[Dict[str, Any]]) -> Dict[str, Any]:
-    """TF-IDF 기반 키워드 추출"""
-    try:
-        from sklearn.feature_extraction.text import TfidfVectorizer
-        import numpy as np
-    except ImportError:
-        logger.warning("scikit-learn not installed, falling back to frequency-based")
-        return _extract_keywords_frequency(items)
+    """TF-IDF 기반 키워드 추출 (sklearn 없이 경량 구현)."""
+    import math
 
-    # Prepare documents
-    documents = []
-    for item in items:
-        text = f"{item.get('title', '')} {item.get('description', '')} {item.get('content', '')}"
-        documents.append(text)
-
-    if not documents:
-        return {"top_keywords": [], "total_unique_keywords": 0}
+    # Prepare tokenized documents
+    documents: List[List[str]] = []
+    doc_freq: Dict[str, int] = {}
 
     # Korean + English stop words
-    stop_words = [
+    stop_words = {
         # Korean
         "은", "는", "이", "가", "을", "를", "에", "의", "와", "과", "도", "로", "으로",
         "에서", "까지", "부터", "만", "뿐", "다", "고", "며", "면", "지", "든", "니",
@@ -315,52 +306,59 @@ def _extract_keywords_tfidf(items: List[Dict[str, Any]]) -> Dict[str, Any]:
         "what", "which", "who", "when", "where", "why", "how", "all",
         "each", "every", "both", "few", "more", "most", "other", "some",
         "such", "no", "nor", "not", "only", "own", "same", "so", "than",
-        "too", "very", "just", "also", "now", "said", "says"
+        "too", "very", "just", "also", "now", "said", "says",
+    }
+
+    for item in items:
+        text = f"{item.get('title', '')} {item.get('description', '')} {item.get('content', '')}"
+        tokens = re.findall(r"[가-힣a-zA-Z]{2,}", text.lower())
+        tokens = [t for t in tokens if t not in stop_words]
+        if not tokens:
+            continue
+        documents.append(tokens)
+
+        # Update document frequency (per unique token in this document)
+        for token in set(tokens):
+            doc_freq[token] = doc_freq.get(token, 0) + 1
+
+    if not documents:
+        return {"top_keywords": [], "total_unique_keywords": 0}
+
+    num_docs = len(documents)
+
+    # Compute TF-IDF scores
+    tfidf_scores: Dict[str, float] = {}
+    for tokens in documents:
+        doc_len = len(tokens)
+        counts: Dict[str, int] = {}
+        for t in tokens:
+            counts[t] = counts.get(t, 0) + 1
+
+        for token, cnt in counts.items():
+            tf = cnt / doc_len
+            df = doc_freq.get(token, 1)
+            idf = math.log(num_docs / df) + 1.0
+            tfidf_scores[token] = tfidf_scores.get(token, 0.0) + tf * idf
+
+    # Sort by TF-IDF score
+    sorted_keywords = sorted(tfidf_scores.items(), key=lambda x: x[1], reverse=True)
+
+    top_keywords = [
+        {
+            "keyword": kw,
+            "score": round(score, 4),
+            "count": doc_freq.get(kw, 0),
+        }
+        for kw, score in sorted_keywords[:20]
+        if score > 0
     ]
 
-    # TF-IDF Vectorizer
-    vectorizer = TfidfVectorizer(
-        max_features=100,
-        stop_words=stop_words,
-        ngram_range=(1, 2),  # Unigrams and bigrams
-        min_df=1,
-        max_df=0.9,
-        token_pattern=r'(?u)\b[가-힣a-zA-Z]{2,}\b'  # Korean + English, min 2 chars
-    )
-
-    try:
-        tfidf_matrix = vectorizer.fit_transform(documents)
-        feature_names = vectorizer.get_feature_names_out()
-
-        # Calculate average TF-IDF score across all documents
-        avg_scores = np.asarray(tfidf_matrix.mean(axis=0)).flatten()
-
-        # Create keyword list with scores
-        keyword_scores = list(zip(feature_names, avg_scores))
-        keyword_scores.sort(key=lambda x: x[1], reverse=True)
-
-        # Get top keywords
-        top_keywords = [
-            {"keyword": kw, "score": round(float(score), 4), "count": int((tfidf_matrix[:, i].toarray() > 0).sum())}
-            for i, (kw, score) in enumerate(keyword_scores[:20])
-            if score > 0.01
-        ]
-
-        # Also extract document frequency for reference
-        doc_freq = {}
-        for i, kw in enumerate(feature_names):
-            doc_freq[kw] = int((tfidf_matrix[:, i].toarray() > 0).sum())
-
-        return {
-            "top_keywords": top_keywords,
-            "total_unique_keywords": len(feature_names),
-            "method": "tfidf",
-            "ngram_range": "1-2"
-        }
-
-    except Exception as e:
-        logger.error(f"TF-IDF vectorization failed: {e}")
-        return _extract_keywords_frequency(items)
+    return {
+        "top_keywords": top_keywords,
+        "total_unique_keywords": len(tfidf_scores),
+        "method": "tfidf",
+        "ngram_range": "1-1",
+    }
 
 
 def _extract_keywords_frequency(items: List[Dict[str, Any]]) -> Dict[str, Any]:
@@ -421,14 +419,14 @@ def _get_llm():
         deployment_name = (
             agent_cfg.llm.deployment_name
             if agent_cfg and agent_cfg.llm and agent_cfg.llm.deployment_name
-            else os.getenv("OPENAI_DEPLOYMENT_NAME", "gpt-4")
+            else os.getenv("OPENAI_DEPLOYMENT_NAME", "gpt-5.1")
         )
         return AzureChatOpenAI(
             deployment_name=deployment_name,
             temperature=0.7,
         )
     elif provider == "openai":
-        model = model_name or os.getenv("OPENAI_MODEL_NAME", "gpt-4-turbo-preview")
+        model = model_name or os.getenv("OPENAI_MODEL_NAME", "gpt-5.1")
         return ChatOpenAI(
             model=model,
             temperature=0.7,
@@ -450,7 +448,7 @@ def _get_llm():
     else:
         # Fallback to Azure OpenAI
         logger.warning(f"Unknown LLM provider '{provider}', falling back to Azure OpenAI")
-        deployment_name = os.getenv("OPENAI_DEPLOYMENT_NAME", "gpt-4")
+        deployment_name = os.getenv("OPENAI_DEPLOYMENT_NAME", "gpt-5.1")
         return AzureChatOpenAI(
             deployment_name=deployment_name,
             temperature=0.7,

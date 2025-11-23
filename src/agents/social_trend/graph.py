@@ -139,8 +139,11 @@ def collect_node(state: SocialTrendAgentState) -> Dict[str, Any]:
             else:
                 items = []
 
-            all_items.extend(items)
-            logger.info(f"Collected {len(items)} items from {platform}")
+            if items:
+                all_items.extend(items)
+                logger.info(f"Collected {len(items)} items from {platform}")
+            else:
+                logger.info(f"No items collected from {platform}")
 
         except Exception as e:
             logger.error(f"Error collecting from {platform}: {e}")
@@ -157,7 +160,8 @@ def collect_node(state: SocialTrendAgentState) -> Dict[str, Any]:
             max_results=max_per_platform,
             default=[]
         )
-        all_items.extend(rss_items)
+        if rss_items:
+            all_items.extend(rss_items)
 
     agent_logger.node_end("collect", {"items_count": len(all_items)})
     return {"raw_items": all_items}

@@ -167,15 +167,27 @@ def normalize_items(items: List[CollectedItem]) -> List[Dict[str, Any]]:
     """
     normalized: List[Dict[str, Any]] = []
     for it in items:
-        normalized.append(
-            {
-                "source": it.source,
-                "title": it.title,
-                "url": it.url,
-                "content": it.content,
-                "published_at": it.published_at,
-            }
-        )
+        # Handle both dict and object types
+        if isinstance(it, dict):
+            normalized.append(
+                {
+                    "source": it.get("source", ""),
+                    "title": it.get("title", ""),
+                    "url": it.get("url", ""),
+                    "content": it.get("content", ""),
+                    "published_at": it.get("published_at", ""),
+                }
+            )
+        else:
+            normalized.append(
+                {
+                    "source": it.source,
+                    "title": it.title,
+                    "url": it.url,
+                    "content": it.content,
+                    "published_at": it.published_at,
+                }
+            )
     return normalized
 
 
