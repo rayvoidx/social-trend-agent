@@ -423,7 +423,8 @@ def plan_node(state: NewsAgentState) -> Dict[str, Any]:
     run_id = state.run_id or "unknown"
     logger = AgentLogger("news_trend_agent", run_id)
     logger.node_start("plan")
-    plan = [
+    # plan must be a Dict (AgentState.plan is Dict[str, Any])
+    plan_steps = [
         "Collect",
         "Normalize",
         "Analyze",
@@ -432,7 +433,7 @@ def plan_node(state: NewsAgentState) -> Dict[str, Any]:
         "Report+Notify",
     ]
     logger.node_end("plan")
-    return {"plan": plan}
+    return {"plan": {"steps": plan_steps, "display": plan_steps}}
 
 
 def critic_node(state: NewsAgentState) -> Dict[str, Any]:

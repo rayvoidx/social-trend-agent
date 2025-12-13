@@ -83,6 +83,8 @@ def get_retry_policy_for_op(steps: List[Dict[str, Any]], op_prefix: str) -> Dict
     p = (op_prefix or "").strip().lower()
     if not p:
         return {}
+    if not steps:
+        return {}
     for s in steps:
         op = s.get("op")
         if isinstance(op, str) and op.strip().lower().startswith(p):
@@ -103,6 +105,8 @@ def get_timeout_for_op(steps: List[Dict[str, Any]], op_prefix: str) -> Optional[
     p = (op_prefix or "").strip().lower()
     if not p:
         return None
+    if not steps:
+        return None
     for s in steps:
         op = s.get("op")
         if isinstance(op, str) and op.strip().lower().startswith(p):
@@ -121,6 +125,8 @@ def get_circuit_breaker_for_step(steps: List[Dict[str, Any]], step_id: Optional[
 
 def step_ops(steps: List[Dict[str, Any]]) -> List[str]:
     ops: List[str] = []
+    if not steps:
+        return ops
     for s in steps:
         op = s.get("op")
         if isinstance(op, str) and op.strip():
@@ -141,6 +147,8 @@ def has_step(steps: List[Dict[str, Any]], op_prefix: str) -> bool:
 def get_first_step_params(steps: List[Dict[str, Any]], op_prefix: str) -> Dict[str, Any]:
     p = (op_prefix or "").strip().lower()
     if not p:
+        return {}
+    if not steps:
         return {}
     for s in steps:
         op = s.get("op")
