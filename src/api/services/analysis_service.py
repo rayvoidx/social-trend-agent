@@ -15,7 +15,7 @@ from src.agents.news_trend.tools import (
     extract_keywords,
     summarize_trend
 )
-from src.integrations.llm import get_llm_client
+from src.integrations.llm.llm_client import get_llm_client
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -415,7 +415,13 @@ Now classify this test text:
 Text: {validated_data[-1]['text'][:200]}
 Label:"""
 
-        test_result = client.invoke(test_prompt)
+        test_result = client.chat(
+            messages=[
+                {"role": "user", "content": test_prompt}
+            ],
+            temperature=0.1,
+            max_tokens=50
+        )
 
         return {
             "status": "completed",

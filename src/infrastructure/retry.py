@@ -6,8 +6,9 @@ import functools
 from typing import Callable, Any, Optional, Tuple, Type
 import logging
 
-logger = logging.getLogger(__name__)
+from src.infrastructure.timeout import run_with_timeout, HardTimeoutError
 
+logger = logging.getLogger(__name__)
 
 def backoff_retry(
     max_retries: int = 5,
@@ -32,11 +33,39 @@ def backoff_retry(
     def decorator(func: Callable) -> Callable:
         @functools.wraps(func)
         def wrapper(*args, **kwargs) -> Any:
+            # Plan-aware dynamic overrides (runtime)
+            plan_rp = kwargs.pop("__plan_retry_policy", None)
+            plan_timeout = kwargs.pop("__plan_timeout_seconds", None)
+            _ = kwargs.pop("__plan_step_id", None)  # reserved for logging in future
+
+            dyn_max_retries = max_retries
+            dyn_backoff_factor = backoff_factor
+            dyn_backoff_base = backoff_base
+            if isinstance(plan_rp, dict):
+                mr = plan_rp.get("max_retries")
+                bo = plan_rp.get("backoff_seconds")
+                try:
+                    if isinstance(mr, int):
+                        dyn_max_retries = max(0, min(5, mr))
+                except Exception:
+                    pass
+                # Map backoff_seconds to backoff_factor when base is 2**attempt.
+                # We interpret bo as initial delay.
+                try:
+                    if isinstance(bo, (int, float)):
+                        dyn_backoff_factor = float(bo)
+                except Exception:
+                    pass
+
             last_exception = None
 
-            for attempt in range(max_retries + 1):
+            for attempt in range(dyn_max_retries + 1):
                 try:
-                    result = func(*args, **kwargs)
+                    # Hard timeout (process-first; thread fallback) if provided.
+                    if isinstance(plan_timeout, int) and plan_timeout > 0:
+                        result = run_with_timeout(func, *args, timeout_seconds=plan_timeout, prefer_process=True, **kwargs)
+                    else:
+                        result = func(*args, **kwargs)
 
                     # Log success after retry
                     if attempt > 0:
@@ -46,21 +75,34 @@ def backoff_retry(
 
                     return result
 
+                except HardTimeoutError as e:
+                    last_exception = e
+                    if attempt >= dyn_max_retries:
+                        logger.error(
+                            f"{func.__name__} hard-timeout after {dyn_max_retries} retries: {e}"
+                        )
+                        break
+                    backoff_time = dyn_backoff_factor * (dyn_backoff_base ** attempt)
+                    logger.warning(
+                        f"{func.__name__} hard-timeout (attempt {attempt + 1}/{dyn_max_retries}). "
+                        f"Retrying in {backoff_time:.1f}s..."
+                    )
+                    time.sleep(backoff_time)
                 except exceptions as e:
                     last_exception = e
 
                     # Don't retry on last attempt
-                    if attempt >= max_retries:
+                    if attempt >= dyn_max_retries:
                         logger.error(
-                            f"{func.__name__} failed after {max_retries} retries: {e}"
+                            f"{func.__name__} failed after {dyn_max_retries} retries: {e}"
                         )
                         break
 
                     # Calculate backoff
-                    backoff_time = backoff_factor * (backoff_base ** attempt)
+                    backoff_time = dyn_backoff_factor * (dyn_backoff_base ** attempt)
 
                     logger.warning(
-                        f"{func.__name__} attempt {attempt + 1}/{max_retries} failed: {e}. "
+                        f"{func.__name__} attempt {attempt + 1}/{dyn_max_retries} failed: {e}. "
                         f"Retrying in {backoff_time:.1f}s..."
                     )
 
@@ -70,7 +112,6 @@ def backoff_retry(
 
                     # Wait before retry
                     time.sleep(backoff_time)
-
             # All retries exhausted
             raise last_exception
 

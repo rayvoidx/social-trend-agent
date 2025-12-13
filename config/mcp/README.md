@@ -58,8 +58,7 @@ notepad %APPDATA%\Claude\claude_desktop_config.json
         "/absolute/path/to/social-trend-agent/automation/mcp/mcp_server.py"
       ],
       "env": {
-        "OPENAI_API_KEY": "your-openai-api-key",
-        "LLM_PROVIDER": "openai"
+        "OPENAI_API_KEY": "your-openai-api-key"
       }
     }
   }
@@ -164,21 +163,10 @@ API 키를 설정 파일에 직접 넣지 않고 `.env` 파일 사용:
 
 `.env` 파일:
 ```bash
-OPENAI_API_KEY=sk-your-key
-LLM_PROVIDER=openai
+OPENAI_API_KEY=sk-your-key                  # OpenAI 사용 시
+ANTHROPIC_API_KEY=sk-ant-your-key          # Anthropic 사용 시
 NEWS_API_KEY=your-news-api-key
 BRAVE_API_KEY=your-brave-api-key  # 선택
-```
-
-### 다른 LLM 사용
-
-```json
-{
-  "env": {
-    "LLM_PROVIDER": "anthropic",
-    "ANTHROPIC_API_KEY": "sk-ant-your-key"
-  }
-}
 ```
 
 ## 🔍 Cursor IDE 설정

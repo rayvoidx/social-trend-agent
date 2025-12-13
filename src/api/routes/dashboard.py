@@ -17,11 +17,10 @@
 """
 from fastapi import FastAPI, WebSocket, HTTPException, BackgroundTasks, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import Response
 from pydantic import BaseModel, Field
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Tuple
 import asyncio
-import json
 from datetime import datetime
 import logging
 
@@ -30,10 +29,16 @@ from src.infrastructure.distributed import (
     TaskPriority,
     TaskStatus
 )
-from src.infrastructure.monitoring import MetricsAggregator
+from src.infrastructure.monitoring import (
+    MetricsAggregator,
+    get_metrics as prometheus_generate_latest,
+    get_metrics_content_type,
+)
 from src.domain.models import Insight, InsightSource, INSIGHT_REPOSITORY, MISSION_REPOSITORY
 from src.domain.models import save_insight_from_result
 from src.domain.mission import generate_missions_from_insight, recommend_creators_for_mission
+from src.api.routes.n8n import router as n8n_router
+from src.api.routes.mcp_routes import router as mcp_router
 
 logger = logging.getLogger(__name__)
 
@@ -53,12 +58,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Include n8n routes
-from src.api.routes.n8n import router as n8n_router
+# Include routes
 app.include_router(n8n_router)
-
-# Include MCP routes
-from src.api.routes.mcp_routes import router as mcp_router
 app.include_router(mcp_router)
 
 # Global executor (initialized on startup)
@@ -71,7 +72,10 @@ executor: Optional[DistributedAgentExecutor] = None
 
 class TaskSubmitRequest(BaseModel):
     """태스크 제출 요청 모델"""
-    agent_name: str = Field(..., description="에이전트 이름 (예: news_trend_agent)")
+    agent_name: str = Field(
+        default="auto",
+        description="에이전트 이름 (news_trend_agent|viral_video_agent|social_trend_agent|auto)",
+    )
     query: str = Field(..., description="검색 쿼리")
     params: Dict[str, Any] = Field(default_factory=dict, description="추가 파라미터")
     priority: int = Field(default=1, ge=0, le=3, description="우선순위 (0=낮음, 3=긴급)")
@@ -140,23 +144,128 @@ async def startup_event():
     # 에이전트 실행 함수 정의
     async def execute_agent(agent_name: str, query: str, params: Dict[str, Any]) -> Dict[str, Any]:
         """에이전트 실행 및 결과 반환"""
-        if agent_name == "news_trend_agent":
-            from src.agents.news_trend.graph import run_agent as run_news_agent
-            source = InsightSource.NEWS_TREND
-            state_news = run_news_agent(query=query, **params)
-            # Pydantic 모델을 dict로 변환
-            result = state_news.model_dump()
-        elif agent_name == "viral_video_agent":
-            from src.agents.viral_video.graph import run_agent as run_viral_agent
-            source = InsightSource.VIRAL_VIDEO
-            state_viral = run_viral_agent(query=query, **params)
-            result = state_viral.model_dump()
-        elif agent_name == "social_trend_agent":
-            from agents.social_trend_agent.graph import run_agent as run_social_agent
-            source = InsightSource.SOCIAL_TREND
-            result = run_social_agent(query=query, **params)
+        # API/웹 환경에서는 stdin 기반 승인(HITL) 입력이 불가능하므로 기본적으로 비활성화
+        params = dict(params or {})
+        params.setdefault("require_approval", False)
+
+        async def _run_single(agent: str, q: str, p: Dict[str, Any]) -> Tuple[InsightSource, Dict[str, Any]]:
+            if agent == "news_trend_agent":
+                from src.agents.news_trend.graph import run_agent as run_news_agent
+                source = InsightSource.NEWS_TREND
+                state = run_news_agent(query=q, **p)
+                return source, state.model_dump()
+            if agent == "viral_video_agent":
+                from src.agents.viral_video.graph import run_agent as run_viral_agent
+                source = InsightSource.VIRAL_VIDEO
+                state = run_viral_agent(query=q, **p)
+                return source, state.model_dump()
+            if agent == "social_trend_agent":
+                from src.agents.social_trend.graph import run_agent as run_social_agent
+                source = InsightSource.SOCIAL_TREND
+                state = run_social_agent(query=q, **p)
+                return source, state.model_dump()
+            raise ValueError(f"Unknown agent: {agent}")
+
+        # 2025: Orchestrator 3-gear mode (router -> planner -> workers)
+        if agent_name == "auto":
+            from src.agents.orchestrator import orchestrate_request
+            orch = orchestrate_request(
+                query=query,
+                agent_hint=params.get("agent_hint"),
+                time_window=params.get("time_window"),
+                language=params.get("language"),
+            )
+            routing = orch.get("routing") if isinstance(orch, dict) else {}
+            plan = (orch.get("plan") if isinstance(orch, dict) else {}) or {}
+            agents = plan.get("agents") if isinstance(plan, dict) else None
+            if not isinstance(agents, list) or not agents:
+                agents = [{"agent_name": "news_trend_agent", "params": {}}]
+
+            # Strong binding: pass orchestrator output into agent state
+            params.setdefault("orchestrator", orch)
+
+            sub_results = []
+            primary_agent = str(plan.get("primary_agent") or agents[0].get("agent_name") or "news_trend_agent")
+            primary_source: Optional[InsightSource] = None
+            primary_result: Optional[Dict[str, Any]] = None
+
+            for item in agents:
+                ag = str(item.get("agent_name") or "")
+                if ag not in ("news_trend_agent", "viral_video_agent", "social_trend_agent"):
+                    continue
+                # Worker params = request params + planner params (planner params win)
+                worker_params = dict(params)
+                planner_params = item.get("params")
+                if isinstance(planner_params, dict):
+                    worker_params.update(planner_params)
+                # ensure orchestrator is passed through explicitly
+                worker_params["orchestrator"] = orch
+                source, result = await _run_single(ag, query, worker_params)
+                sub_results.append({"agent_name": ag, "result": result})
+                if ag == primary_agent and primary_result is None:
+                    primary_source = source
+                    primary_result = result
+
+            # Fallback if primary wasn't executed
+            if primary_result is None and sub_results:
+                primary_agent = sub_results[0]["agent_name"]
+                primary_result = sub_results[0]["result"]
+                # best effort source mapping
+                primary_source = {
+                    "news_trend_agent": InsightSource.NEWS_TREND,
+                    "viral_video_agent": InsightSource.VIRAL_VIDEO,
+                    "social_trend_agent": InsightSource.SOCIAL_TREND,
+                }.get(primary_agent, InsightSource.NEWS_TREND)
+
+            if primary_result is None or primary_source is None:
+                raise ValueError("Orchestrator failed to produce a worker result")
+
+            # Optional merge report for multi-agent runs
+            combine = str(plan.get("combine") or "single")
+            if combine == "merge" and len(sub_results) >= 2:
+                try:
+                    from src.integrations.llm.llm_client import get_llm_client
+                    from src.core.routing import ModelRole, get_model_for_role
+                    client = get_llm_client()
+                    writer_model = get_model_for_role("orchestrator", ModelRole.WRITER)
+                    snippets = []
+                    for sr in sub_results:
+                        r = sr["result"] or {}
+                        snippets.append(
+                            f"## {sr['agent_name']}\n"
+                            f"- summary: {((r.get('analysis') or {}).get('summary') or '')}\n"
+                            f"- report_md: {str(r.get('report_md') or '')[:2000]}\n"
+                        )
+                    merge_prompt = (
+                        "Merge the following agent outputs into ONE coherent Korean report.\n"
+                        "Requirements:\n"
+                        "- Keep it concise but actionable\n"
+                        "- Avoid duplicates\n"
+                        "- If conflicting, say '불확실'\n\n"
+                        f"User query: {query}\n\n"
+                        + "\n\n".join(snippets)
+                    )
+                    merged_report = client.chat(
+                        messages=[
+                            {"role": "system", "content": "You are a report merger for a compound AI system."},
+                            {"role": "user", "content": merge_prompt},
+                        ],
+                        temperature=0.3,
+                        max_tokens=1200,
+                        model=writer_model,
+                    )
+                    primary_result["report_md"] = str(merged_report).strip()
+                except Exception:
+                    # If merge fails, keep primary report.
+                    pass
+
+            # Use primary result as the task result, but include sub_results for debugging.
+            source = primary_source
+            result = primary_result
+            result["_sub_results"] = sub_results
+
         else:
-            raise ValueError(f"Unknown agent: {agent_name}")
+            source, result = await _run_single(agent_name, query, params)
 
         # JSON 직렬화를 위해 딕셔너리로 변환 (dict로 반환됨)
         result_dict = {
@@ -174,7 +283,7 @@ async def startup_event():
         try:
             insight = save_insight_from_result(source, result_dict)
             result_dict["insight_id"] = insight.id
-        except Exception as e:  # 인사이트 저장 실패가 전체 실행을 막지 않도록
+        except Exception:  # 인사이트 저장 실패가 전체 실행을 막지 않도록
             logger.error("Failed to save insight from agent result", exc_info=True)
 
         return result_dict
@@ -214,6 +323,19 @@ async def health_check():
         "timestamp": datetime.now().isoformat(),
         "executor_running": executor is not None
     }
+
+
+@app.get("/metrics")
+async def prometheus_metrics() -> Response:
+    """
+    Prometheus scrape endpoint.
+
+    Prometheus in `config/prometheus.yml` scrapes `/metrics` from the `api` service.
+    We expose it here to avoid repeated 404s and enable real metrics when
+    `prometheus_client` is installed.
+    """
+    data = prometheus_generate_latest()
+    return Response(content=data, media_type=get_metrics_content_type())
 
 
 @app.get("/api/insights")
@@ -494,7 +616,7 @@ async def get_statistics():
             metrics_list = aggregator.load_all_metrics(agent_name)
             if metrics_list:
                 perf_stats[agent_name] = aggregator.compute_statistics(metrics_list)
-    except:
+    except Exception:
         perf_stats = {}
 
     return {
@@ -617,7 +739,7 @@ async def websocket_metrics(websocket: WebSocket):
     finally:
         try:
             await websocket.close()
-        except:
+        except Exception:
             pass
 
 

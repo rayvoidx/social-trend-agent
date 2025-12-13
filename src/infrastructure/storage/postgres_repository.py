@@ -8,11 +8,10 @@ PostgreSQL 영속 저장소
 """
 from __future__ import annotations
 
-import json
 import logging
 import os
 from datetime import datetime
-from typing import Any, Dict, Generic, List, Optional, Type, TypeVar
+from typing import Any, Dict, Generic, List, Optional, TypeVar
 from contextlib import contextmanager
 
 logger = logging.getLogger(__name__)
@@ -115,7 +114,7 @@ def create_tables():
         metadata = MetaData()
 
         # Insights table
-        insights = Table(
+        Table(
             "insights",
             metadata,
             Column("id", String(64), primary_key=True),
@@ -139,7 +138,7 @@ def create_tables():
         )
 
         # Missions table
-        missions = Table(
+        Table(
             "missions",
             metadata,
             Column("id", String(64), primary_key=True),
@@ -159,7 +158,7 @@ def create_tables():
         )
 
         # Creators table
-        creators = Table(
+        Table(
             "creators",
             metadata,
             Column("id", String(64), primary_key=True),
@@ -180,7 +179,7 @@ def create_tables():
         )
 
         # Collected items table (for raw data)
-        collected_items = Table(
+        Table(
             "collected_items",
             metadata,
             Column("id", String(64), primary_key=True),
@@ -230,14 +229,7 @@ class PostgresRepository(Generic[T]):
 
     def create(self, id: str, data: Dict[str, Any]) -> Dict[str, Any]:
         """
-        새 레코드 생성.
-
-        Args:
-            id: 레코드 ID
-            data: 저장할 데이터
-
-        Returns:
-            저장된 데이터
+        새 레코드 생성 (save 메서드 내부 사용).
         """
         if self._engine:
             try:
@@ -264,6 +256,30 @@ class PostgresRepository(Generic[T]):
         # Fallback
         self._memory_store[id] = {"id": id, **data}
         return self._memory_store[id]
+
+    def save(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        데이터 저장 (Upsert). id 필드가 필수입니다.
+        """
+        if "id" not in data:
+            raise ValueError("Data must contain 'id' field")
+        
+        # Extract ID and pass rest as data (actually pass full data including ID to columns is fine if create handles it)
+        # create method expects id separately but also data.
+        # It constructs INSERT ... (id, ...) VALUES (:id, ...).
+        # And data keys are used for columns. If 'id' is in data, it might duplicate column 'id'?
+        # In create: columns = ", ".join(data.keys()).
+        # If 'id' is in data, columns will have 'id'.
+        # And INSERT INTO table (id, id, ...) -> Error.
+        # So we must remove 'id' from data passed to create, OR update create.
+        # Actually create method logic:
+        # columns = ", ".join(data.keys())
+        # INSERT INTO table (id, {columns})
+        # So 'id' should NOT be in data keys if it's already first arg.
+        
+        id_val = data["id"]
+        data_without_id = {k: v for k, v in data.items() if k != "id"}
+        return self.create(id_val, data_without_id)
 
     def get(self, id: str) -> Optional[Dict[str, Any]]:
         """ID로 레코드 조회."""
@@ -415,6 +431,10 @@ class PostgresRepository(Generic[T]):
                 if all(item.get(k) == v for k, v in filters.items())
             ]
         return len(items)
+
+    # Aliases for compatibility
+    find_by_id = get
+    find_all = list
 
 
 # =============================================================================

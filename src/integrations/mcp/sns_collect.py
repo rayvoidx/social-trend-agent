@@ -1,37 +1,33 @@
-from __future__ import annotations
-
 """
-SNS/비디오 데이터 수집용 MCP 클라이언트 래퍼
+SNS 데이터 수집용 MCP 클라이언트 래퍼
 
-Supadata MCP 서버(@supadata/mcp)를 통해 비디오 트랜스크립트와 웹 콘텐츠를 수집합니다.
-
-사용 가능한 Supadata MCP 도구:
-- supadata_transcript: YouTube, TikTok, Instagram, Twitter 비디오 트랜스크립트 추출
-- supadata_scrape: 웹 페이지 콘텐츠를 Markdown으로 추출
-- supadata_map: 웹사이트의 모든 URL 수집
-- supadata_crawl: 웹사이트 전체 크롤링
-- supadata_check_transcript_status: 트랜스크립트 작업 상태 확인
-- supadata_check_crawl_status: 크롤링 작업 상태 확인
+- Supadata MCP 서버(기본: supadata-ai-mcp)를 통해서만
+  X / TikTok / YouTube 데이터를 가져오도록 강제합니다.
+- 개별 에이전트의 tools 모듈에서는 이 래퍼만 사용하고,
+  직접 SNS HTTP API를 호출하지 않도록 합니다.
 
 환경 변수:
-- SUPADATA_API_KEY: Supadata API 키 (필수)
+- SUPADATA_MCP_SERVER   : 기본 MCP 서버 이름 (default: supadata-ai-mcp)
+- SUPADATA_X_TOOL       : X 검색용 MCP 툴 이름   (default: x_search)
+- SUPADATA_TIKTOK_TOOL  : TikTok 검색용 MCP 툴 이름 (default: tiktok_search)
+- SUPADATA_YOUTUBE_TOOL : YouTube 트렌딩용 MCP 툴 이름 (default: youtube_trending)
 """
+from __future__ import annotations
 
+import os
 import asyncio
 import logging
 from typing import Any, Dict, List, Optional
 
-from dotenv import load_dotenv
-
-# .env 파일에서 환경 변수 로드
-load_dotenv(override=True)
-
 from src.integrations.mcp.servers.mcp_client import call_mcp_tool
+from src.integrations.mcp.supadata_contract import (
+    parse_supadata_tiktok_videos,
+    parse_supadata_x_posts,
+    parse_supadata_youtube_videos,
+)
+from src.integrations.mcp.utils import retry_with_backoff
 
 logger = logging.getLogger(__name__)
-
-# MCP 서버 이름
-SUPADATA_SERVER = "supadata-ai-mcp"
 
 
 def _run_coro(coro):
@@ -47,227 +43,219 @@ def _run_coro(coro):
             loop.close()
 
 
-def fetch_video_transcript(
-    url: str,
-    lang: str = "ko",
-    server_name: str = SUPADATA_SERVER,
-) -> Dict[str, Any]:
-    """
-    비디오 URL에서 트랜스크립트를 추출합니다.
-
-    지원 플랫폼: YouTube, TikTok, Instagram, Twitter
-
-    Args:
-        url: 비디오 URL
-        lang: 트랜스크립트 언어 (기본: ko)
-        server_name: MCP 서버 이름
-
-    Returns:
-        트랜스크립트 데이터 (content, lang, availableLangs 등)
-    """
-    async def _call() -> Dict[str, Any]:
-        return await call_mcp_tool(
-            server_name,
-            "supadata_transcript",
-            {"url": url, "lang": lang},
-        )
-
-    try:
-        result = _run_coro(_call()) or {}
-    except Exception as e:
-        logger.error(f"Transcript extraction failed: {e}")
-        return {"error": str(e)}
-
-    return result
+@retry_with_backoff(retries=2, backoff_factor=1.5)
+async def _call_mcp_safe(server: str, tool: str, args: Dict[str, Any]) -> Dict[str, Any]:
+    """재시도 로직이 포함된 내부 호출 함수."""
+    return await call_mcp_tool(server, tool, args)
 
 
-def fetch_youtube_transcript(
-    video_id: str,
-    lang: str = "ko",
-) -> Dict[str, Any]:
-    """
-    YouTube 비디오 트랜스크립트를 추출합니다.
-
-    Args:
-        video_id: YouTube 비디오 ID
-        lang: 트랜스크립트 언어
-
-    Returns:
-        트랜스크립트 데이터
-    """
-    url = f"https://www.youtube.com/watch?v={video_id}"
-    return fetch_video_transcript(url, lang)
-
-
-def fetch_tiktok_transcript(
-    video_url: str,
-    lang: str = "ko",
-) -> Dict[str, Any]:
-    """
-    TikTok 비디오 트랜스크립트를 추출합니다.
-
-    Args:
-        video_url: TikTok 비디오 URL
-        lang: 트랜스크립트 언어
-
-    Returns:
-        트랜스크립트 데이터
-    """
-    return fetch_video_transcript(video_url, lang)
-
-
-def scrape_web_content(
-    url: str,
-    server_name: str = SUPADATA_SERVER,
-) -> Dict[str, Any]:
-    """
-    웹 페이지 콘텐츠를 Markdown 형식으로 추출합니다.
-
-    Args:
-        url: 웹 페이지 URL
-        server_name: MCP 서버 이름
-
-    Returns:
-        스크래핑된 콘텐츠 (markdown, title, metadata 등)
-    """
-    async def _call() -> Dict[str, Any]:
-        return await call_mcp_tool(
-            server_name,
-            "supadata_scrape",
-            {"url": url},
-        )
-
-    try:
-        result = _run_coro(_call()) or {}
-    except Exception as e:
-        logger.error(f"Web scraping failed: {e}")
-        return {"error": str(e)}
-
-    return result
-
-
-def map_website_urls(
-    url: str,
-    server_name: str = SUPADATA_SERVER,
-) -> List[str]:
-    """
-    웹사이트의 모든 URL을 수집합니다.
-
-    Args:
-        url: 웹사이트 기본 URL
-        server_name: MCP 서버 이름
-
-    Returns:
-        URL 목록
-    """
-    async def _call() -> Dict[str, Any]:
-        return await call_mcp_tool(
-            server_name,
-            "supadata_map",
-            {"url": url},
-        )
-
-    try:
-        result = _run_coro(_call()) or {}
-    except Exception as e:
-        logger.error(f"Website mapping failed: {e}")
-        return []
-
-    return result.get("urls", [])
-
-
-def create_crawl_job(
-    url: str,
-    server_name: str = SUPADATA_SERVER,
-) -> Dict[str, Any]:
-    """
-    웹사이트 크롤링 작업을 생성합니다.
-
-    Args:
-        url: 크롤링할 웹사이트 URL
-        server_name: MCP 서버 이름
-
-    Returns:
-        크롤링 작업 정보 (job_id 등)
-    """
-    async def _call() -> Dict[str, Any]:
-        return await call_mcp_tool(
-            server_name,
-            "supadata_crawl",
-            {"url": url},
-        )
-
-    try:
-        result = _run_coro(_call()) or {}
-    except Exception as e:
-        logger.error(f"Crawl job creation failed: {e}")
-        return {"error": str(e)}
-
-    return result
-
-
-def check_crawl_status(
-    job_id: str,
-    server_name: str = SUPADATA_SERVER,
-) -> Dict[str, Any]:
-    """
-    크롤링 작업 상태를 확인합니다.
-
-    Args:
-        job_id: 크롤링 작업 ID
-        server_name: MCP 서버 이름
-
-    Returns:
-        작업 상태 및 결과
-    """
-    async def _call() -> Dict[str, Any]:
-        return await call_mcp_tool(
-            server_name,
-            "supadata_check_crawl_status",
-            {"job_id": job_id},
-        )
-
-    try:
-        result = _run_coro(_call()) or {}
-    except Exception as e:
-        logger.error(f"Crawl status check failed: {e}")
-        return {"error": str(e)}
-
-    return result
-
-
-def extract_video_data_from_transcript(
-    transcript_result: Dict[str, Any],
-    platform: str = "youtube",
+async def fetch_x_posts_via_mcp_async(
+    query: str,
+    max_results: int = 20,
+    server_name: Optional[str] = None,
+    tool_name: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
-    """
-    트랜스크립트 결과에서 비디오 데이터를 추출하여 표준 형식으로 변환합니다.
+    """X 포스트 수집 (Async)"""
+    server = server_name or os.getenv("SUPADATA_MCP_SERVER", "supadata-ai-mcp")
+    tool = tool_name or os.getenv("SUPADATA_X_TOOL", "x_search")
 
-    Args:
-        transcript_result: fetch_video_transcript 결과
-        platform: 플랫폼 이름
-
-    Returns:
-        표준화된 비디오 데이터 목록
-    """
-    if "error" in transcript_result:
+    try:
+        result = await _call_mcp_safe(
+            str(server),
+            str(tool),
+            {"query": query, "max_results": max_results},
+        )
+    except Exception as e:
+        logger.error(f"X MCP call failed: {e}")
         return []
 
-    content = transcript_result.get("content", [])
-    if not content:
+    _, posts = parse_supadata_x_posts(result or {})
+    if not posts:
+        logger.warning("Supadata X tool returned no parseable posts. Check SUPADATA_X_TOOL.")
         return []
 
-    # 트랜스크립트 텍스트 결합
-    full_text = " ".join([
-        item.get("text", "")
-        for item in content
-        if isinstance(item, dict)
-    ])
+    out: List[Dict[str, Any]] = []
+    for p in posts[:max_results]:
+        text = p.text or ""
+        tweet_id = p.id or ""
+        url = p.url or (f"https://x.com/i/web/status/{tweet_id}" if tweet_id else "")
+        out.append(
+            {
+                "source": "x",
+                "title": text.split("\n")[0][:80],
+                "url": url,
+                "content": text,
+                "created_at": p.created_at,
+            }
+        )
+    return out
 
-    return [{
-        "platform": platform,
-        "transcript": full_text,
-        "lang": transcript_result.get("lang", ""),
-        "available_langs": transcript_result.get("availableLangs", []),
-        "segments": content,
-    }]
+
+def fetch_x_posts_via_mcp(
+    query: str,
+    max_results: int = 20,
+    server_name: Optional[str] = None,
+    tool_name: Optional[str] = None,
+) -> List[Dict[str, Any]]:
+    """X 포스트 수집 (Sync Wrapper)"""
+    return _run_coro(fetch_x_posts_via_mcp_async(query, max_results, server_name, tool_name))
+
+
+async def fetch_tiktok_videos_via_mcp_async(
+    query: str,
+    max_count: int = 20,
+    server_name: Optional[str] = None,
+    tool_name: Optional[str] = None,
+) -> List[Dict[str, Any]]:
+    """TikTok 영상 수집 (Async)"""
+    server = server_name or os.getenv("SUPADATA_MCP_SERVER", "supadata-ai-mcp")
+    tool = tool_name or os.getenv("SUPADATA_TIKTOK_TOOL", "tiktok_search")
+
+    try:
+        result = await _call_mcp_safe(
+            str(server),
+            str(tool),
+            {"query": query, "max_count": max_count},
+        )
+    except Exception as e:
+        logger.error(f"TikTok MCP call failed: {e}")
+        return []
+
+    _, videos = parse_supadata_tiktok_videos(result or {})
+    if not videos:
+        logger.warning("Supadata TikTok tool returned no parseable videos. Check SUPADATA_TIKTOK_TOOL.")
+        return []
+
+    out: List[Dict[str, Any]] = []
+    for v in videos[:max_count]:
+        out.append(
+            {
+                "video_id": v.id or "",
+                "title": v.title or "",
+                "channel": v.author or "",
+                "views": int(v.views or 0),
+                "likes": int(v.likes or 0),
+                "comments": int(v.comments or 0),
+                "published_at": v.published_at,
+                "platform": "tiktok",
+                "url": v.url or "",
+                "thumbnail": v.thumbnail or "",
+            }
+        )
+    return out
+
+
+def fetch_tiktok_videos_via_mcp(
+    query: str,
+    max_count: int = 20,
+    server_name: Optional[str] = None,
+    tool_name: Optional[str] = None,
+) -> List[Dict[str, Any]]:
+    """TikTok 영상 수집 (Sync Wrapper)"""
+    return _run_coro(fetch_tiktok_videos_via_mcp_async(query, max_count, server_name, tool_name))
+
+
+async def fetch_youtube_videos_via_mcp_async(
+    market: str = "KR",
+    time_window: str = "24h",
+    max_results: int = 50,
+    server_name: Optional[str] = None,
+    tool_name: Optional[str] = None,
+) -> List[Dict[str, Any]]:
+    """YouTube 트렌딩 수집 (Async)"""
+    server = server_name or os.getenv("SUPADATA_MCP_SERVER", "supadata-ai-mcp")
+    tool = tool_name or os.getenv("SUPADATA_YOUTUBE_TOOL", "youtube_trending")
+
+    try:
+        result = await _call_mcp_safe(
+            str(server),
+            str(tool),
+            {
+                "region": market,
+                "time_window": time_window,
+                "max_results": max_results,
+            },
+        )
+    except Exception as e:
+        logger.error(f"YouTube MCP call failed: {e}")
+        return []
+
+    _, videos = parse_supadata_youtube_videos(result or {})
+    if not videos:
+        logger.warning("Supadata YouTube tool returned no parseable videos. Check SUPADATA_YOUTUBE_TOOL.")
+        return []
+
+    out: List[Dict[str, Any]] = []
+    for v in videos[:max_results]:
+        out.append(
+            {
+                "video_id": v.id or "",
+                "title": v.title or "",
+                "channel": v.channel or "",
+                "views": int(v.views or 0),
+                "likes": int(v.likes or 0),
+                "comments": int(v.comments or 0),
+                "published_at": v.published_at,
+                "description": (v.description or "")[:200],
+                "thumbnail": v.thumbnail or "",
+                "platform": "youtube",
+                "url": v.url or (f"https://www.youtube.com/watch?v={v.id}" if v.id else ""),
+            }
+        )
+    return out
+
+
+def fetch_youtube_videos_via_mcp(
+    market: str = "KR",
+    time_window: str = "24h",
+    max_results: int = 50,
+    server_name: Optional[str] = None,
+    tool_name: Optional[str] = None,
+) -> List[Dict[str, Any]]:
+    """YouTube 트렌딩 수집 (Sync Wrapper)"""
+    return _run_coro(
+        fetch_youtube_videos_via_mcp_async(market, time_window, max_results, server_name, tool_name)
+    )
+
+
+async def fetch_all_sns_trends_async(
+    query: str,
+    market: str = "KR",
+    max_results: int = 20,
+) -> Dict[str, List[Dict[str, Any]]]:
+    """
+    모든 SNS 플랫폼(X, TikTok, YouTube) 데이터를 병렬로 수집합니다.
+    """
+    logger.info(f"Starting parallel SNS collection for query: {query}")
+    
+    # YouTube는 검색어가 아니라 market 트렌딩이므로 query 영향 없음 (필요시 검색 툴로 변경 가능)
+    # 현재 스펙상 YouTube는 trending, 나머지는 keyword search
+    
+    results = await asyncio.gather(
+        fetch_x_posts_via_mcp_async(query, max_results=max_results),
+        fetch_tiktok_videos_via_mcp_async(query, max_count=max_results),
+        fetch_youtube_videos_via_mcp_async(market=market, max_results=max_results),
+        return_exceptions=True
+    )
+
+    x_res, tiktok_res, youtube_res = results
+
+    # 예외 처리
+    final_results = {
+        "x": x_res if isinstance(x_res, list) else [],
+        "tiktok": tiktok_res if isinstance(tiktok_res, list) else [],
+        "youtube": youtube_res if isinstance(youtube_res, list) else [],
+    }
+    
+    total_count = sum(len(v) for v in final_results.values())
+    logger.info(f"Parallel collection finished. Total items: {total_count}")
+    return final_results
+
+
+def fetch_all_sns_trends(
+    query: str,
+    market: str = "KR",
+    max_results: int = 20,
+) -> Dict[str, List[Dict[str, Any]]]:
+    """모든 SNS 플랫폼 병렬 수집 (Sync Wrapper)"""
+    return _run_coro(fetch_all_sns_trends_async(query, market, max_results))

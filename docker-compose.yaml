@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # FastAPI API 서버
   api:
@@ -9,8 +7,7 @@ services:
     ports:
       - "8000:8000"
     environment:
-      # LLM Provider
-      - LLM_PROVIDER=${LLM_PROVIDER:-openai}
+      # LLM Keys (multi-LLM)
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - GOOGLE_API_KEY=${GOOGLE_API_KEY}
@@ -18,10 +15,16 @@ services:
       # Data Sources
       - BRAVE_API_KEY=${BRAVE_API_KEY}
       - SUPADATA_API_KEY=${SUPADATA_API_KEY}
+      - SUPADATA_MCP_SERVER=${SUPADATA_MCP_SERVER}
+      - SUPADATA_X_TOOL=${SUPADATA_X_TOOL}
+      - SUPADATA_TIKTOK_TOOL=${SUPADATA_TIKTOK_TOOL}
+      - SUPADATA_YOUTUBE_TOOL=${SUPADATA_YOUTUBE_TOOL}
       - YOUTUBE_API_KEY=${YOUTUBE_API_KEY}
 
       # Vector Store
       - PINECONE_API_KEY=${PINECONE_API_KEY}
+      - EMBEDDING_MODEL_NAME=${EMBEDDING_MODEL_NAME:-text-embedding-3-large}
+      - ALLOW_SAMPLE_FALLBACK=${ALLOW_SAMPLE_FALLBACK:-true}
 
       # Infrastructure
       - REDIS_URL=redis://redis:6379
@@ -47,11 +50,28 @@ services:
     networks:
       - trend-network
 
+  # Frontend - React Web UI
+  web:
+    build:
+      context: ./apps/web
+      dockerfile: Dockerfile
+      args:
+        - VITE_API_URL=/
+    ports:
+      - "5173:5173"
+    depends_on:
+      - api
+    restart: unless-stopped
+    networks:
+      - trend-network
+
   # Redis - 캐시 및 세션 스토리지
   redis:
     image: redis:7-alpine
     ports:
-      - "6379:6379"
+      # Avoid host port conflicts (6379 is commonly occupied by local redis).
+      # Override via env: REDIS_HOST_PORT=6379 (or any free port)
+      - "${REDIS_HOST_PORT:-6380}:6379"
     volumes:
       - redis-data:/data
     command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
@@ -68,9 +88,9 @@ services:
   prometheus:
     image: prom/prometheus:latest
     ports:
-      - "9090:9090"
+      - "9091:9090"
     volumes:
-      - ./automation/otel/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./config/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus-data:/prometheus
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'

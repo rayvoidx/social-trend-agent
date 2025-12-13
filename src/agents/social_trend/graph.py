@@ -5,7 +5,9 @@ import json
 import uuid
 import logging
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from dataclasses import asdict
+from typing import Any, Dict, List, Optional, cast
+import sys
 
 from langgraph.graph import StateGraph, END
 
@@ -13,102 +15,127 @@ from src.core.state import SocialTrendAgentState
 from src.core.logging import AgentLogger
 from src.core.errors import safe_api_call
 from src.core.config import get_config_manager
+from src.core.checkpoint import get_checkpointer
 from src.agents.social_trend.tools import (
     fetch_x_posts,
     fetch_instagram_posts,
     fetch_naver_blog_posts,
     fetch_rss_feeds,
     normalize_items,
+    retrieve_relevant_posts,
     analyze_sentiment_and_keywords,
+    generate_trend_report,
 )
-from src.integrations.llm import get_llm_client
-from src.integrations.retrieval.vectorstore_pinecone import PineconeVectorStore
+from src.core.gateway import route_request
+from src.core.planning.plan import (
+    get_agent_entry,
+    derive_execution_overrides,
+    normalize_steps,
+    has_step,
+    get_retry_policy_for_step,
+    get_retry_policy_for_op,
+    get_timeout_for_step,
+    get_timeout_for_op,
+    get_circuit_breaker_for_step,
+)
+from src.core.planning.graph import build_plan_runner_graph
+
+try:
+    # Check LangChain availability
+    import langchain
+    LANGCHAIN_AVAILABLE = True
+except ImportError:
+    LANGCHAIN_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
 
-ARTIFACTS_DIR = Path(__file__).resolve().parents[2] / "artifacts" / "social_trend_agent"
+# Write artifacts to project-level /artifacts (not inside the Python package)
+ARTIFACTS_DIR = Path(__file__).resolve().parents[3] / "artifacts" / "social_trend_agent"
 ARTIFACTS_DIR.mkdir(parents=True, exist_ok=True)
-
-
-def _get_llm_client():
-    """Social Trend 에이전트 전용 LLM 클라이언트를 가져옵니다."""
-    try:
-        return get_llm_client(agent_name="social_trend_agent")
-    except Exception as e:
-        logger.warning(f"Failed to initialize LLM client: {e}")
-        return None
-
-
-def _get_vector_store():
-    """Social Trend 에이전트 전용 벡터 스토어를 가져옵니다."""
-    try:
-        cfg = get_config_manager()
-        agent_cfg = cfg.get_agent_config("social_trend_agent")
-        vs_cfg = agent_cfg.vector_store if agent_cfg and agent_cfg.vector_store else {}
-        index_name = vs_cfg.get("index_name", "social-trend-index")
-        return PineconeVectorStore(index_name=index_name)
-    except Exception as e:
-        logger.warning(f"Failed to initialize vector store: {e}")
-        return None
-
-
-def _generate_llm_insights(
-    query: str,
-    normalized: List[Dict[str, Any]],
-    analysis: Dict[str, Any],
-    sources: List[str],
-    time_window: str
-) -> str:
-    """LLM을 사용하여 심층 인사이트를 생성합니다"""
-    llm_client = _get_llm_client()
-    if not llm_client:
-        return "LLM을 사용할 수 없어 인사이트를 생성하지 못했습니다."
-
-    try:
-        from src.agents.social_trend.prompts import SUMMARIZE_PROMPT_TEMPLATE
-
-        # Prepare data for LLM
-        sentiment = analysis.get("sentiment", {})
-        keywords_data = analysis.get("keywords", {})
-        top_keywords = keywords_data.get("top_keywords", [])
-
-        keywords_str = "\n".join([
-            f"- {kw['keyword']}: {kw['count']}회 언급"
-            for kw in top_keywords[:10]
-        ])
-
-        social_items_str = "\n\n".join([
-            f"[{item.get('source', 'Unknown')}] {item.get('title', '')}\n{item.get('content', '')[:200]}..."
-            for item in normalized[:15]
-        ])
-
-        prompt = SUMMARIZE_PROMPT_TEMPLATE.format(
-            query=query,
-            time_window=time_window,
-            sources=", ".join(sources),
-            item_count=len(normalized),
-            positive=sentiment.get("positive_pct", 0),
-            neutral=sentiment.get("neutral_pct", 0),
-            negative=sentiment.get("negative_pct", 0),
-            keywords=keywords_str,
-            social_items=social_items_str
-        )
-
-        return llm_client.invoke(prompt)
-
-    except Exception as e:
-        logger.warning(f"LLM insight generation failed: {e}")
-        return f"인사이트 생성 중 오류가 발생했습니다: {str(e)}"
 
 
 # =============================================================================
 # LangGraph Node Functions
 # =============================================================================
 
+def router_node(state: SocialTrendAgentState) -> Dict[str, Any]:
+    """Cheap gateway/router node (Compound AI 2025)."""
+    run_id = state.run_id or "unknown"
+    agent_logger = AgentLogger("social_trend_agent", run_id)
+    agent_logger.node_start("router")
+
+    route = route_request(
+        agent_name="social_trend_agent",
+        query=state.query,
+        time_window=state.time_window,
+        language=state.language,
+    )
+
+    agent_entry = get_agent_entry(state.orchestrator, "social_trend_agent")
+    overrides = derive_execution_overrides(agent_entry)
+    if overrides:
+        route = {**route, **overrides}
+
+    # Apply small, safe knobs for cost/latency
+    suggested_tw = route.get("suggested_time_window")
+    time_window = state.time_window
+    if isinstance(suggested_tw, str) and suggested_tw.strip():
+        time_window = suggested_tw.strip()
+
+    suggested_max = route.get("suggested_max_results")
+    max_results_per_platform = state.max_results_per_platform
+    if isinstance(suggested_max, int) and suggested_max > 0:
+        # this is per-platform cap; keep conservative
+        max_results_per_platform = min(max(10, suggested_max), 80)
+
+    agent_logger.node_end("router")
+    return {
+        "time_window": time_window,
+        "max_results_per_platform": max_results_per_platform,
+        "analysis": {**(state.analysis or {}), "_routing": route},
+        "plan": {"steps": normalize_steps(agent_entry) if agent_entry else []},
+    }
+
+
+def rag_filter_node(state: SocialTrendAgentState) -> Dict[str, Any]:
+    """Optional RAG filter step controlled by tool plan (rag_mode/top_k)."""
+    run_id = state.run_id or "unknown"
+    agent_logger = AgentLogger("social_trend_agent", run_id)
+    agent_logger.node_start("rag_filter")
+
+    routed = (state.analysis or {}).get("_routing", {}) if isinstance(state.analysis, dict) else {}
+    rag_mode = str(routed.get("rag_mode") or "graph").lower()
+    rag_top_k = routed.get("rag_top_k")
+    top_k = int(rag_top_k) if isinstance(rag_top_k, int) and rag_top_k > 0 else min(30, len(state.normalized))
+
+    steps = state.plan.get("steps") if isinstance(state.plan, dict) else []
+    if isinstance(steps, list) and steps and not has_step(steps, "rag"):
+        rag_mode = "none"
+
+    if rag_mode == "none" or not state.normalized:
+        agent_logger.node_end("rag_filter", output_size=len(state.normalized))
+        return {}
+
+    use_graph = rag_mode != "vector"
+    filtered = retrieve_relevant_posts(state.query, state.normalized, top_k=top_k, use_graph=use_graph)
+    agent_logger.node_end("rag_filter", output_size=len(filtered))
+    return {
+        "normalized": filtered,
+        "analysis": {**(state.analysis or {}), "rag_selected": len(filtered)},
+    }
+
 def collect_node(state: SocialTrendAgentState) -> Dict[str, Any]:
     """소셜 미디어 데이터 수집 노드"""
-    agent_logger = AgentLogger("social_trend_agent", state.run_id)
+    run_id = state.run_id or "unknown"
+    agent_logger = AgentLogger("social_trend_agent", run_id)
     agent_logger.node_start("collect")
+
+    steps = state.plan.get("steps") if isinstance(state.plan, dict) else []
+    current_step_id = (state.plan_execution or {}).get("current_step_id") if isinstance(state.plan_execution, dict) else None
+    rp = get_retry_policy_for_step(steps, current_step_id) or get_retry_policy_for_op(steps, "collect")
+    timeout_s = get_timeout_for_step(steps, current_step_id) or get_timeout_for_op(steps, "collect")
+    cb = get_circuit_breaker_for_step(steps, current_step_id)
+    strict = isinstance(cb, dict) and isinstance(cb.get("failure_threshold"), int) and cb.get("failure_threshold", 0) > 0
 
     all_items = []
     max_per_platform = state.max_results_per_platform // len(state.platforms) if state.platforms else 10
@@ -117,33 +144,42 @@ def collect_node(state: SocialTrendAgentState) -> Dict[str, Any]:
         try:
             if platform == "x":
                 items = safe_api_call(
+                    "fetch_x_posts",
                     fetch_x_posts,
                     state.query,
                     max_results=max_per_platform,
-                    default=[]
+                    fallback_value=[],
+                    retry_policy=rp,
+                    timeout_seconds=timeout_s,
+                    raise_on_fail=strict,
                 )
             elif platform == "instagram":
                 items = safe_api_call(
+                    "fetch_instagram_posts",
                     fetch_instagram_posts,
                     state.query,
                     max_results=max_per_platform,
-                    default=[]
+                    fallback_value=[],
+                    retry_policy=rp,
+                    timeout_seconds=timeout_s,
+                    raise_on_fail=strict,
                 )
             elif platform == "naver_blog":
                 items = safe_api_call(
+                    "fetch_naver_blog_posts",
                     fetch_naver_blog_posts,
                     state.query,
                     max_results=max_per_platform,
-                    default=[]
+                    fallback_value=[],
+                    retry_policy=rp,
+                    timeout_seconds=timeout_s,
+                    raise_on_fail=strict,
                 )
             else:
                 items = []
 
-            if items:
-                all_items.extend(items)
-                logger.info(f"Collected {len(items)} items from {platform}")
-            else:
-                logger.info(f"No items collected from {platform}")
+            all_items.extend(items)
+            logger.info(f"Collected {len(items)} items from {platform}")
 
         except Exception as e:
             logger.error(f"Error collecting from {platform}: {e}")
@@ -155,32 +191,40 @@ def collect_node(state: SocialTrendAgentState) -> Dict[str, Any]:
             "https://www.reddit.com/r/MachineLearning/.rss",
         ]
         rss_items = safe_api_call(
+            "fetch_rss_feeds",
             fetch_rss_feeds,
             feeds,
             max_results=max_per_platform,
-            default=[]
+            fallback_value=[],
+            retry_policy=rp,
+            timeout_seconds=timeout_s,
+            raise_on_fail=strict,
         )
-        if rss_items:
-            all_items.extend(rss_items)
+        all_items.extend(rss_items)
 
-    agent_logger.node_end("collect", {"items_count": len(all_items)})
-    return {"raw_items": all_items}
+    # Convert CollectedItem objects to dicts
+    all_items_dict = [asdict(item) if hasattr(item, "__dataclass_fields__") else item for item in all_items]
+
+    agent_logger.node_end("collect", output_size=len(all_items_dict), items_count=len(all_items_dict))
+    return {"raw_items": all_items_dict}
 
 
 def normalize_node(state: SocialTrendAgentState) -> Dict[str, Any]:
     """데이터 정규화 노드"""
-    agent_logger = AgentLogger("social_trend_agent", state.run_id)
+    run_id = state.run_id or "unknown"
+    agent_logger = AgentLogger("social_trend_agent", run_id)
     agent_logger.node_start("normalize")
 
     normalized = normalize_items(state.raw_items)
 
-    agent_logger.node_end("normalize", {"normalized_count": len(normalized)})
+    agent_logger.node_end("normalize", output_size=len(normalized), normalized_count=len(normalized))
     return {"normalized": normalized}
 
 
 def analyze_node(state: SocialTrendAgentState) -> Dict[str, Any]:
-    """감성 및 키워드 분석 노드 (Pinecone RAG 지원)"""
-    agent_logger = AgentLogger("social_trend_agent", state.run_id)
+    """감성 및 키워드 분석 노드"""
+    run_id = state.run_id or "unknown"
+    agent_logger = AgentLogger("social_trend_agent", run_id)
     agent_logger.node_start("analyze")
 
     texts = [
@@ -197,36 +241,7 @@ def analyze_node(state: SocialTrendAgentState) -> Dict[str, Any]:
             engagement_stats[platform] = {"count": 0, "total_engagement": 0}
         engagement_stats[platform]["count"] += 1
 
-    # Index items in Pinecone for RAG
-    try:
-        llm_client = _get_llm_client()
-        vector_store = _get_vector_store()
-
-        if llm_client and vector_store and state.normalized:
-            import hashlib
-            # Build corpus
-            ids = [hashlib.md5(t.encode()).hexdigest()[:12] for t in texts]
-            vectors = llm_client.get_embeddings_batch(texts)
-
-            # Prepare metadata
-            metadatas = []
-            for i, item in enumerate(state.normalized):
-                meta = {
-                    "index": i,
-                    "title": item.get("title", "")[:500],
-                    "source": item.get("source", ""),
-                    "url": item.get("url", "")[:500]
-                }
-                metadatas.append(meta)
-
-            # Upsert to Pinecone
-            vector_store.upsert(ids, vectors, metadatas)
-            logger.info(f"Indexed {len(ids)} items to Pinecone for social_trend_agent")
-
-    except Exception as e:
-        logger.warning(f"Failed to index items to Pinecone: {e}")
-
-    agent_logger.node_end("analyze", {"sentiment": analysis.get("sentiment", {})})
+    agent_logger.node_end("analyze", output_size=len(state.normalized), sentiment=analysis.get("sentiment", {}))
     return {
         "analysis": analysis,
         "engagement_stats": engagement_stats
@@ -235,15 +250,17 @@ def analyze_node(state: SocialTrendAgentState) -> Dict[str, Any]:
 
 def summarize_node(state: SocialTrendAgentState) -> Dict[str, Any]:
     """LLM 기반 인사이트 생성 노드"""
-    agent_logger = AgentLogger("social_trend_agent", state.run_id)
+    run_id = state.run_id or "unknown"
+    agent_logger = AgentLogger("social_trend_agent", run_id)
     agent_logger.node_start("summarize")
 
-    llm_insights = _generate_llm_insights(
+    llm_insights = generate_trend_report(
         query=state.query,
         normalized=state.normalized,
         analysis=state.analysis,
         sources=state.platforms,
-        time_window=state.time_window or "7d"
+        time_window=state.time_window or "7d",
+        strategy=str((state.analysis or {}).get("_routing", {}).get("summary_strategy", "auto")),
     )
 
     summary = _make_summary(state.analysis)
@@ -259,7 +276,8 @@ def summarize_node(state: SocialTrendAgentState) -> Dict[str, Any]:
 
 def report_node(state: SocialTrendAgentState) -> Dict[str, Any]:
     """리포트 생성 노드"""
-    agent_logger = AgentLogger("social_trend_agent", state.run_id)
+    run_id = state.run_id or "unknown"
+    agent_logger = AgentLogger("social_trend_agent", run_id)
     agent_logger.node_start("report")
 
     metrics = _make_metrics(state.normalized, state.analysis)
@@ -277,7 +295,7 @@ def report_node(state: SocialTrendAgentState) -> Dict[str, Any]:
         state.analysis.get("llm_insights", "")
     )
 
-    agent_logger.node_end("report", {"report_path": str(report_path)})
+    agent_logger.node_end("report", output_size=len(state.normalized), report_path=str(report_path))
     return {
         "metrics": metrics,
         "report_md": str(report_path)
@@ -288,26 +306,33 @@ def report_node(state: SocialTrendAgentState) -> Dict[str, Any]:
 # Graph Builder
 # =============================================================================
 
-def build_graph() -> StateGraph:
+def build_graph(checkpointer: Optional[Any] = None) -> Any:
     """Social Trend Agent 그래프 빌드"""
     graph = StateGraph(SocialTrendAgentState)
 
     # Add nodes
+    graph.add_node("router", router_node)
     graph.add_node("collect", collect_node)
     graph.add_node("normalize", normalize_node)
+    graph.add_node("rag_filter", rag_filter_node)
     graph.add_node("analyze", analyze_node)
     graph.add_node("summarize", summarize_node)
     graph.add_node("report", report_node)
 
     # Add edges
-    graph.set_entry_point("collect")
+    graph.set_entry_point("router")
+    graph.add_edge("router", "collect")
     graph.add_edge("collect", "normalize")
-    graph.add_edge("normalize", "analyze")
+    graph.add_edge("normalize", "rag_filter")
+    graph.add_edge("rag_filter", "analyze")
     graph.add_edge("analyze", "summarize")
     graph.add_edge("summarize", "report")
     graph.add_edge("report", END)
 
-    return graph
+    return graph.compile(
+        checkpointer=checkpointer,
+        interrupt_before=["report"] if checkpointer else None
+    )
 
 
 # =============================================================================
@@ -321,25 +346,18 @@ def run_agent(
     time_window: str = "7d",
     language: str = "ko",
     max_results: int = 50,
+    run_id: Optional[str] = None,
+    require_approval: bool = True,
+    orchestrator: Optional[Dict[str, Any]] = None,
 ) -> SocialTrendAgentState:
     """
     Social Trend Agent 실행
-
-    Args:
-        query: 검색어
-        sources: 수집할 소스 플랫폼 목록
-        rss_feeds: RSS 피드 URL 목록
-        time_window: 시간 범위
-        language: 언어 코드
-        max_results: 최대 결과 수
-
-    Returns:
-        최종 상태
     """
     if sources is None:
         sources = ["x", "instagram", "naver_blog"]
 
-    run_id = str(uuid.uuid4())[:8]
+    if not run_id:
+        run_id = str(uuid.uuid4())[:8]
 
     # Initialize state
     initial_state = SocialTrendAgentState(
@@ -350,19 +368,80 @@ def run_agent(
         rss_feeds=rss_feeds or [],
         max_results_per_platform=max_results,
         include_rss=True,
-        run_id=run_id
+        orchestrator=orchestrator,
+        run_id=run_id,
+        report_md=None,
+        error=None,
     )
 
-    # Build and compile graph
-    graph = build_graph()
-    compiled = graph.compile()
+    # Auto-disable HITL when running in non-interactive environments (e.g., Docker/API/UI)
+    if require_approval and not sys.stdin.isatty():
+        logger.warning("require_approval=True but stdin is not a TTY. Disabling HITL to avoid EOF.")
+        require_approval = False
 
-    # Execute
+    # Setup HITL
+    checkpointer = get_checkpointer() if require_approval else None
+    # 2025: Plan-driven dynamic graph compilation (plan == graph structure)
+    agent_entry = get_agent_entry(orchestrator, "social_trend_agent")
+    steps = normalize_steps(agent_entry) if agent_entry else []
+    if steps:
+        graph = build_plan_runner_graph(
+            agent_name="social_trend_agent",
+            state_cls=SocialTrendAgentState,
+            router_node=router_node,
+            op_nodes={
+                "collect": collect_node,
+                "normalize": normalize_node,
+                "rag": rag_filter_node,
+                "analyze": analyze_node,
+                "summarize": summarize_node,
+                "report": report_node,
+            },
+            steps=steps,
+            checkpointer=checkpointer,
+        )
+    else:
+        graph = build_graph(checkpointer=checkpointer)
+    config = {"configurable": {"thread_id": run_id}}
+    
     logger.info(f"Starting Social Trend Agent run: {run_id}")
-    final_state = compiled.invoke(initial_state)
 
-    logger.info(f"Completed Social Trend Agent run: {run_id}")
-    return SocialTrendAgentState(**final_state)
+    try:
+        # 1. Start execution
+        current_state = graph.invoke(initial_state, config=config)
+        
+        # 2. Check for interrupt
+        if require_approval:
+            snapshot = graph.get_state(config)
+            if snapshot.next and "report" in snapshot.next:
+                # CLI Interaction
+                print("\n" + "="*50)
+                print("✋  APPROVAL REQUIRED")
+                print("="*50)
+                print(f"Social analysis complete for: '{query}'")
+                print("-" * 50)
+                
+                while True:
+                    choice = input("Proceed to generate report? (y/n): ").strip().lower()
+                    if choice == 'y':
+                        logger.info("✅ Approved. Resuming...")
+                        current_state = graph.invoke(None, config=config)
+                        break
+                    elif choice == 'n':
+                        logger.info("🛑 Aborted by user.")
+                        return SocialTrendAgentState(**cast(Dict[str, Any], current_state))
+                    else:
+                        print("Please enter 'y' or 'n'.")
+                    
+        logger.info(f"Completed Social Trend Agent run: {run_id}")
+        
+        if isinstance(current_state, dict):
+            return SocialTrendAgentState(**cast(Dict[str, Any], current_state))
+        return current_state
+        
+    except Exception as e:
+        logger.error(f"Error running social trend agent: {e}")
+        raise
 
 
 # Legacy compatibility function
@@ -375,7 +454,9 @@ def run_agent_legacy(
     max_results: int = 50,
 ) -> Dict[str, Any]:
     """Legacy run_agent that returns Dict for backwards compatibility"""
-    state = run_agent(query, sources, rss_feeds, time_window, language, max_results)
+    state = run_agent(
+        query, sources, rss_feeds, time_window, language, max_results, require_approval=False
+    )
     return {
         "query": state.query,
         "time_window": state.time_window,
@@ -473,5 +554,3 @@ def _write_report(
     lines.append("")
 
     path.write_text("\n".join(lines), encoding="utf-8")
-
-

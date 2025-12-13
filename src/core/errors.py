@@ -4,6 +4,8 @@
 from typing import Dict, Any, Optional, List
 from datetime import datetime
 from enum import Enum
+import time
+import random
 
 
 class CompletionStatus(Enum):
@@ -209,6 +211,9 @@ def safe_api_call(
     *args,
     fallback_value=None,
     result_container: Optional[PartialResult] = None,
+    retry_policy: Optional[Dict[str, Any]] = None,
+    timeout_seconds: Optional[int] = None,
+    raise_on_fail: bool = False,
     **kwargs
 ):
     """
@@ -225,23 +230,61 @@ def safe_api_call(
     Returns:
         api_func의 결과 또는 에러 시 fallback_value
     """
+    rp = retry_policy if isinstance(retry_policy, dict) else {}
+    max_retries = rp.get("max_retries", 0)
+    backoff_seconds = rp.get("backoff_seconds", 0.0)
+    jitter = bool(rp.get("jitter", False))
     try:
-        result = api_func(*args, **kwargs)
-        if result_container:
-            result_container.mark_success(operation_name)
-        return result
+        max_retries = int(max_retries)
+    except Exception:
+        max_retries = 0
+    try:
+        backoff_seconds = float(backoff_seconds)
+    except Exception:
+        backoff_seconds = 0.0
+    max_retries = max(0, min(5, max_retries))
+    backoff_seconds = max(0.0, min(30.0, backoff_seconds))
 
-    except Exception as e:
-        if result_container:
-            result_container.add_error(operation_name, e, context={
-                "args": str(args)[:100],  # Truncate long args
-                "kwargs": str(kwargs)[:100]
-            })
-            result_container.add_limitation(
-                f"{operation_name} 실패로 인해 데이터가 불완전할 수 있습니다."
-            )
+    last_exc: Optional[Exception] = None
 
-        return fallback_value
+    for attempt in range(max_retries + 1):
+        try:
+            # Best-effort timeout: use the function's own timeouts if available.
+            # If a hard timeout is provided, run the call in a thread and wait.
+            if isinstance(timeout_seconds, int) and timeout_seconds > 0:
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
+                    fut = ex.submit(api_func, *args, **kwargs)
+                    result = fut.result(timeout=float(timeout_seconds))
+            else:
+                result = api_func(*args, **kwargs)
+            if result_container:
+                result_container.mark_success(operation_name)
+            return result
+        except Exception as e:
+            last_exc = e
+            if attempt < max_retries:
+                sleep_s = backoff_seconds * (2 ** attempt)
+                if jitter and sleep_s > 0:
+                    sleep_s = sleep_s + random.uniform(0.0, min(1.0, sleep_s))
+                if sleep_s > 0:
+                    time.sleep(sleep_s)
+                continue
+
+    if last_exc is not None and result_container:
+        result_container.add_error(operation_name, last_exc, context={
+            "args": str(args)[:100],
+            "kwargs": str(kwargs)[:100],
+            "retry_policy": rp,
+        })
+        result_container.add_limitation(
+            f"{operation_name} 실패로 인해 데이터가 불완전할 수 있습니다."
+        )
+
+    if raise_on_fail and last_exc is not None:
+        raise last_exc
+
+    return fallback_value
 
 
 # 사용 예제:

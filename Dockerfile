@@ -35,7 +35,7 @@ RUN mkdir -p /app/artifacts/news_trend_agent && \
     mkdir -p /app/logs
 
 # Download NLTK data for sentiment analysis
-RUN python -c "import nltk; nltk.download('punkt'); nltk.download('punkt_tab'); nltk.download('averaged_perceptron_tagger'); nltk.download('averaged_perceptron_tagger_eng'); nltk.download('wordnet')"
+RUN python -c "import nltk; nltk.download('punkt'); nltk.download('punkt_tab'); nltk.download('averaged_perceptron_tagger'); nltk.download('averaged_perceptron_tagger_eng'); nltk.download('wordnet'); nltk.download('stopwords')"
 
 # Set Python path
 ENV PYTHONPATH=/app

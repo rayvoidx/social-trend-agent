@@ -5,7 +5,6 @@ Provides:
 - Prometheus metrics
 - Request logging middleware
 - Rate limiting middleware
-- Performance monitoring and aggregation
 """
 from .prometheus_metrics import (
     get_metrics_registry,
@@ -27,6 +26,7 @@ from .prometheus_metrics import (
     get_metrics,
     get_metrics_content_type,
     PROMETHEUS_AVAILABLE,
+    MetricsAggregator,
 )
 from .middleware import (
     LoggingMiddleware,
@@ -37,12 +37,6 @@ from .middleware import (
     JSONFormatter,
     setup_structured_logging,
     setup_middleware,
-)
-# Import from metrics.py (renamed from monitoring.py to avoid name conflict)
-from ..metrics import (
-    PerformanceMetrics,
-    PerformanceMonitor,
-    MetricsAggregator,
 )
 
 __all__ = [
@@ -66,6 +60,7 @@ __all__ = [
     "get_metrics",
     "get_metrics_content_type",
     "PROMETHEUS_AVAILABLE",
+    "MetricsAggregator",
     # Middleware
     "LoggingMiddleware",
     "MetricsMiddleware",
@@ -75,8 +70,4 @@ __all__ = [
     "JSONFormatter",
     "setup_structured_logging",
     "setup_middleware",
-    # Performance monitoring
-    "PerformanceMetrics",
-    "PerformanceMonitor",
-    "MetricsAggregator",
 ]

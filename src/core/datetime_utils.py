@@ -264,7 +264,7 @@ def get_time_window_bounds(
 
     Args:
         time_window: 타임 윈도우 문자열
-        reference_time: 기준 시간 (기본값: 현��� 시간)
+        reference_time: 기준 시간 (기본값: 현재 시간)
 
     Returns:
         (start_datetime, end_datetime) 튜플

@@ -152,23 +152,25 @@ class AgentLogger:
         """에러 메시지 로깅"""
         self._log(logging.ERROR, message, **extra)
 
-    def node_start(self, node_name: str, input_size: int = 0):
+    def node_start(self, node_name: str, input_size: int = 0, **kwargs):
         """노드 시작 로깅"""
         self.info(
             f"Node started: {node_name}",
             node=node_name,
             event="node_start",
-            input_size=input_size
+            input_size=input_size,
+            **kwargs
         )
 
-    def node_end(self, node_name: str, output_size: int = 0, duration_ms: int = 0):
+    def node_end(self, node_name: str, output_size: int = 0, duration_ms: int = 0, **kwargs):
         """노드 완료 로깅"""
         self.info(
             f"Node completed: {node_name}",
             node=node_name,
             event="node_end",
             output_size=output_size,
-            duration_ms=duration_ms
+            duration_ms=duration_ms,
+            **kwargs
         )
 
     def node_error(self, node_name: str, error: Exception):

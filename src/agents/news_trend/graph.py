@@ -2,16 +2,20 @@
 뉴스 트렌드 에이전트를 위한 LangGraph 정의
 
 LangGraph 공식 패턴과 에러 핸들링, 로깅 기능을 적용했습니다.
+Human-in-the-loop (검토/승인) 워크플로우가 포함되어 있습니다.
 """
 import os
 import uuid
 import logging
-from typing import Dict, Any
+from typing import Dict, Any, Optional
+import sys
 from langgraph.graph import StateGraph, END
 
 from src.core.state import NewsAgentState
 from src.core.logging import AgentLogger
 from src.core.errors import PartialResult, CompletionStatus, safe_api_call
+from src.core.checkpoint import get_checkpointer
+from src.core.config import get_config_manager
 from src.agents.news_trend.tools import (
     search_news,
     analyze_sentiment,
@@ -21,23 +25,92 @@ from src.agents.news_trend.tools import (
     redact_pii,
     check_safety,
 )
+from src.core.gateway import route_request
+from src.core.planning.plan import (
+    get_agent_entry,
+    derive_execution_overrides,
+    normalize_steps,
+    has_step,
+    get_retry_policy_for_step,
+    get_retry_policy_for_op,
+    get_timeout_for_step,
+    get_timeout_for_op,
+    get_circuit_breaker_for_step,
+)
+from src.core.planning.graph import build_plan_runner_graph
 
 # Initialize module-level logger (without run_id for module-level logging)
 _module_logger = logging.getLogger("news_trend_agent")
 
 
+def router_node(state: NewsAgentState) -> Dict[str, Any]:
+    """Cheap gateway/router node (Compound AI 2025)."""
+    run_id = state.run_id or "unknown"
+    logger = AgentLogger("news_trend_agent", run_id)
+    logger.node_start("router")
+
+    route = route_request(
+        agent_name="news_trend_agent",
+        query=state.query,
+        time_window=state.time_window,
+        language=state.language,
+    )
+
+    # Orchestrator structured DAG overrides (strong binding, backward compatible)
+    agent_entry = get_agent_entry(state.orchestrator, "news_trend_agent")
+    overrides = derive_execution_overrides(agent_entry)
+    if overrides:
+        route = {**route, **overrides}
+
+    # Apply small, safe knobs for cost/latency
+    suggested_max = route.get("suggested_max_results")
+    max_results = state.max_results
+    if isinstance(suggested_max, int) and suggested_max > 0:
+        max_results = min(max(5, suggested_max), 50)
+    # Allow planner to set max_results directly (strong binding)
+    if isinstance(route.get("max_results"), int) and route.get("max_results") > 0:
+        max_results = min(max(5, int(route["max_results"])), 50)
+
+    suggested_tw = route.get("suggested_time_window")
+    time_window = state.time_window
+    if isinstance(suggested_tw, str) and suggested_tw.strip():
+        time_window = suggested_tw.strip()
+    if isinstance(route.get("time_window"), str) and str(route.get("time_window")).strip():
+        time_window = str(route.get("time_window")).strip()
+
+    logger.node_end("router")
+    return {
+        "time_window": time_window,
+        "max_results": max_results,
+        "analysis": {**(state.analysis or {}), "_routing": route},
+        "plan": {"steps": normalize_steps(agent_entry) if agent_entry else []},
+    }
+
+
 def collect_node(state: NewsAgentState) -> Dict[str, Any]:
+    # If plan explicitly omits collect, skip it (plan==DAG strong binding)
+    steps = state.plan.get("steps") if isinstance(state.plan, dict) else []
+    if isinstance(steps, list) and steps and not has_step(steps, "collect"):
+        logger.node_end("collect", output_size=0)
+        return {}
+
     """
     다양한 소스에서 뉴스 데이터 수집
-
-    에러 핸들링을 통해 API 실패를 우아하게 처리합니다.
     """
-    logger = AgentLogger("news_trend_agent", state.run_id)
+    run_id = state.run_id or "unknown"
+    logger = AgentLogger("news_trend_agent", run_id)
     logger.node_start("collect")
     logger.info(f"Collecting news: query={state.query}, time_window={state.time_window}")
 
     # Use safe_api_call for error handling
     result = PartialResult(status=CompletionStatus.FULL)
+
+    steps = state.plan.get("steps") if isinstance(state.plan, dict) else []
+    current_step_id = (state.plan_execution or {}).get("current_step_id") if isinstance(state.plan_execution, dict) else None
+    rp = get_retry_policy_for_step(steps, current_step_id) or get_retry_policy_for_op(steps, "collect")
+    timeout_s = get_timeout_for_step(steps, current_step_id) or get_timeout_for_op(steps, "collect")
+    cb = get_circuit_breaker_for_step(steps, current_step_id)
+    strict = isinstance(cb, dict) and isinstance(cb.get("failure_threshold"), int) and cb.get("failure_threshold", 0) > 0
 
     raw_items = safe_api_call(
         "search_news",
@@ -47,7 +120,10 @@ def collect_node(state: NewsAgentState) -> Dict[str, Any]:
         language=state.language,
         max_results=state.max_results,
         fallback_value=[],
-        result_container=result
+        result_container=result,
+        retry_policy=rp,
+        timeout_seconds=timeout_s,
+        raise_on_fail=strict,
     )
 
     logger.node_end("collect", output_size=len(raw_items))
@@ -61,11 +137,15 @@ def collect_node(state: NewsAgentState) -> Dict[str, Any]:
 def normalize_node(state: NewsAgentState) -> Dict[str, Any]:
     """
     수집된 데이터 정규화 및 정제
-
-    다운스트림 노드를 위한 일관된 데이터 구조를 보장합니다.
     """
-    logger = AgentLogger("news_trend_agent", state.run_id)
+    run_id = state.run_id or "unknown"
+    logger = AgentLogger("news_trend_agent", run_id)
     logger.node_start("normalize", input_size=len(state.raw_items))
+
+    steps = state.plan.get("steps") if isinstance(state.plan, dict) else []
+    if isinstance(steps, list) and steps and not has_step(steps, "normalize"):
+        logger.node_end("normalize", output_size=len(state.normalized))
+        return {}
 
     normalized = []
     for item in state.raw_items:
@@ -87,11 +167,21 @@ def normalize_node(state: NewsAgentState) -> Dict[str, Any]:
 def analyze_node(state: NewsAgentState) -> Dict[str, Any]:
     """
     감성 분석 및 키워드 추출
-
-    감성 분석과 키워드 추출을 개념적으로 병렬 실행합니다.
     """
-    logger = AgentLogger("news_trend_agent", state.run_id)
+    run_id = state.run_id or "unknown"
+    logger = AgentLogger("news_trend_agent", run_id)
     logger.node_start("analyze", input_size=len(state.normalized))
+
+    steps = state.plan.get("steps") if isinstance(state.plan, dict) else []
+    if isinstance(steps, list) and steps and not has_step(steps, "analyze"):
+        logger.node_end("analyze", output_size=len(state.normalized))
+        return {}
+
+    current_step_id = (state.plan_execution or {}).get("current_step_id") if isinstance(state.plan_execution, dict) else None
+    rp = get_retry_policy_for_step(steps, current_step_id) or get_retry_policy_for_op(steps, "analyze")
+    timeout_s = get_timeout_for_step(steps, current_step_id) or get_timeout_for_op(steps, "analyze")
+    cb = get_circuit_breaker_for_step(steps, current_step_id)
+    strict = isinstance(cb, dict) and isinstance(cb.get("failure_threshold"), int) and cb.get("failure_threshold", 0) > 0
 
     # Analyze sentiment with error handling
     result_sentiment = PartialResult(status=CompletionStatus.FULL)
@@ -100,7 +190,10 @@ def analyze_node(state: NewsAgentState) -> Dict[str, Any]:
         analyze_sentiment,
         items=state.normalized,
         fallback_value={"positive": 0, "neutral": 0, "negative": 0},
-        result_container=result_sentiment
+        result_container=result_sentiment,
+        retry_policy=rp,
+        timeout_seconds=timeout_s,
+        raise_on_fail=strict,
     )
 
     # Extract keywords with error handling
@@ -110,8 +203,39 @@ def analyze_node(state: NewsAgentState) -> Dict[str, Any]:
         extract_keywords,
         items=state.normalized,
         fallback_value={"top_keywords": [], "total_unique_keywords": 0},
-        result_container=result_keywords
+        result_container=result_keywords,
+        retry_policy=rp,
+        timeout_seconds=timeout_s,
+        raise_on_fail=strict,
     )
+
+
+def rag_node(state: NewsAgentState) -> Dict[str, Any]:
+    """
+    Optional explicit RAG step for plan runner.
+    Stores selected relevant items into analysis['_rag_relevant'].
+    """
+    run_id = state.run_id or "unknown"
+    logger = AgentLogger("news_trend_agent", run_id)
+    logger.node_start("rag")
+
+    routed = (state.analysis or {}).get("_routing", {}) if isinstance(state.analysis, dict) else {}
+    rag_mode = str(routed.get("rag_mode") or "graph").lower()
+    rag_top_k = routed.get("rag_top_k")
+    top_k = int(rag_top_k) if isinstance(rag_top_k, int) and rag_top_k > 0 else min(10, len(state.normalized))
+
+    steps = state.plan.get("steps") if isinstance(state.plan, dict) else []
+    if isinstance(steps, list) and steps and not has_step(steps, "rag"):
+        rag_mode = "none"
+
+    if rag_mode == "none":
+        relevant = state.normalized[: max(1, top_k)]
+    else:
+        use_graph = rag_mode != "vector"
+        relevant = retrieve_relevant_items(state.query, state.normalized, top_k, use_graph=use_graph)
+
+    logger.node_end("rag", output_size=len(relevant))
+    return {"analysis": {**state.analysis, "_rag_relevant": relevant}}
 
     analysis = {
         "sentiment": sentiment_results,
@@ -127,25 +251,58 @@ def analyze_node(state: NewsAgentState) -> Dict[str, Any]:
 def summarize_node(state: NewsAgentState) -> Dict[str, Any]:
     """
     LLM을 활용한 트렌드 인사이트 요약
-
-    견고한 LLM 호출을 위해 LangChain과 재시도 로직을 사용합니다.
     """
-    logger = AgentLogger("news_trend_agent", state.run_id)
+    run_id = state.run_id or "unknown"
+    logger = AgentLogger("news_trend_agent", run_id)
     logger.node_start("summarize")
 
     # Use LLM to summarize trend with error handling
     result = PartialResult(status=CompletionStatus.FULL)
-    # Retrieve relevant subset (RAG)
-    relevant = retrieve_relevant_items(state.query, state.normalized, min(10, len(state.normalized)))
+    # Retrieve relevant subset (RAG) - controlled by tool plan (rag_mode/top_k)
+    routed = (state.analysis or {}).get("_routing", {}) if isinstance(state.analysis, dict) else {}
+    rag_mode = str(routed.get("rag_mode") or "graph").lower()
+    rag_top_k = routed.get("rag_top_k")
+    top_k = int(rag_top_k) if isinstance(rag_top_k, int) and rag_top_k > 0 else min(10, len(state.normalized))
 
+    # If plan has no rag step, force no-rag (strong binding)
+    steps = state.plan.get("steps") if isinstance(state.plan, dict) else []
+    if isinstance(steps, list) and steps and not has_step(steps, "rag"):
+        rag_mode = "none"
+
+    # If rag_node already computed a subset, reuse it
+    cached = (state.analysis or {}).get("_rag_relevant") if isinstance(state.analysis, dict) else None
+    if isinstance(cached, list) and cached:
+        relevant = cached
+    else:
+        if rag_mode == "none":
+            relevant = state.normalized[: max(1, top_k)]
+        else:
+            use_graph = rag_mode != "vector"
+            relevant = retrieve_relevant_items(state.query, state.normalized, top_k, use_graph=use_graph)
+
+    steps = state.plan.get("steps") if isinstance(state.plan, dict) else []
+    current_step_id = (state.plan_execution or {}).get("current_step_id") if isinstance(state.plan_execution, dict) else None
+    rp = get_retry_policy_for_step(steps, current_step_id) or get_retry_policy_for_op(steps, "summarize")
+    timeout_s = get_timeout_for_step(steps, current_step_id) or get_timeout_for_op(steps, "summarize")
+    cb = get_circuit_breaker_for_step(steps, current_step_id)
+    strict = isinstance(cb, dict) and isinstance(cb.get("failure_threshold"), int) and cb.get("failure_threshold", 0) > 0
+
+    # summarize_trend is @backoff_retry-decorated; pass plan policy through to decorator to avoid double-retry
     raw_summary = safe_api_call(
         "summarize_trend",
         summarize_trend,
         query=state.query,
         normalized_items=relevant,
         analysis=state.analysis,
+        strategy=str((state.analysis or {}).get("_routing", {}).get("summary_strategy", "auto")),
         fallback_value="트렌드 요약을 생성할 수 없습니다. LLM 서비스를 확인하세요.",
-        result_container=result
+        result_container=result,
+        retry_policy={"max_retries": 0, "backoff_seconds": 0.0, "jitter": False},
+        timeout_seconds=timeout_s,
+        raise_on_fail=strict,
+        __plan_retry_policy=rp,
+        __plan_timeout_seconds=timeout_s,
+        __plan_step_id=current_step_id,
     )
 
     # Guardrails
@@ -161,10 +318,9 @@ def summarize_node(state: NewsAgentState) -> Dict[str, Any]:
 def report_node(state: NewsAgentState) -> Dict[str, Any]:
     """
     마크다운 리포트 생성
-
-    마크다운 형식의 종합 분석 리포트를 생성합니다.
     """
-    logger = AgentLogger("news_trend_agent", state.run_id)
+    run_id = state.run_id or "unknown"
+    logger = AgentLogger("news_trend_agent", run_id)
     logger.node_start("report")
 
     # Build markdown report
@@ -216,6 +372,7 @@ def report_node(state: NewsAgentState) -> Dict[str, Any]:
                 f"---",
                 f"",
                 f"## 🔒 안전 및 프라이버시",
+                f"",
                 f"- 일부 PII 정보가 마스킹되었습니다." if safety.get("pii_found") else "",
                 f"- 안전 카테고리 감지: {', '.join(safety.get('categories', []))}" if safety.get("unsafe") else "",
                 f"",
@@ -263,7 +420,8 @@ def report_node(state: NewsAgentState) -> Dict[str, Any]:
 
 
 def plan_node(state: NewsAgentState) -> Dict[str, Any]:
-    logger = AgentLogger("news_trend_agent", state.run_id)
+    run_id = state.run_id or "unknown"
+    logger = AgentLogger("news_trend_agent", run_id)
     logger.node_start("plan")
     plan = [
         "Collect",
@@ -278,7 +436,8 @@ def plan_node(state: NewsAgentState) -> Dict[str, Any]:
 
 
 def critic_node(state: NewsAgentState) -> Dict[str, Any]:
-    logger = AgentLogger("news_trend_agent", state.run_id)
+    run_id = state.run_id or "unknown"
+    logger = AgentLogger("news_trend_agent", run_id)
     logger.node_start("critic")
     analysis = state.analysis or {}
     review = {
@@ -293,10 +452,9 @@ def critic_node(state: NewsAgentState) -> Dict[str, Any]:
 def notify_node(state: NewsAgentState) -> Dict[str, Any]:
     """
     알림 전송 (n8n, Slack 등)
-
-    설정된 웹훅 엔드포인트로 분석 결과를 전송합니다.
     """
-    logger = AgentLogger("news_trend_agent", state.run_id)
+    run_id = state.run_id or "unknown"
+    logger = AgentLogger("news_trend_agent", run_id)
     logger.node_start("notify")
 
     notifications_sent = []
@@ -348,24 +506,20 @@ def notify_node(state: NewsAgentState) -> Dict[str, Any]:
     return {}
 
 
-def build_graph():
+def build_graph(checkpointer: Optional[Any] = None):
     """
     뉴스 트렌드 에이전트용 LangGraph 구축
-
-    LangGraph 공식 패턴을 따릅니다:
-    - Pydantic 상태 모델을 사용하는 StateGraph
-    - 에러 핸들링을 포함한 순차적 파이프라인
-    - 에러 복구를 위한 조건부 엣지 (향후 개선 예정)
-
-    Returns:
-        실행 준비가 완료된 컴파일된 StateGraph
+    
+    Args:
+        checkpointer: 상태 저장을 위한 체크포인터 (선택 사항)
     """
     _module_logger.info("Building LangGraph for News Trend Agent")
 
-    # Create StateGraph with NewsAgentState (official pattern)
+    # Create StateGraph with NewsAgentState
     graph = StateGraph(NewsAgentState)
 
-    # Add nodes (official pattern: node_name, node_function)
+    # Add nodes
+    graph.add_node("router", router_node)
     graph.add_node("collect", collect_node)
     graph.add_node("plan", plan_node)
     graph.add_node("normalize", normalize_node)
@@ -375,10 +529,11 @@ def build_graph():
     graph.add_node("report", report_node)
     graph.add_node("notify", notify_node)
 
-    # Set entry point (official pattern)
-    graph.set_entry_point("collect")
+    # Set entry point
+    graph.set_entry_point("router")
 
-    # Add edges for sequential pipeline (official pattern)
+    # Add edges
+    graph.add_edge("router", "collect")
     graph.add_edge("collect", "plan")
     graph.add_edge("plan", "normalize")
     graph.add_edge("normalize", "analyze")
@@ -388,53 +543,166 @@ def build_graph():
     graph.add_edge("report", "notify")
     graph.add_edge("notify", END)
 
-    # Compile graph (official pattern - required before execution)
-    compiled_graph = graph.compile()
+    # Compile graph with checkpointer and interrupt logic
+    compiled_graph = graph.compile(
+        checkpointer=checkpointer,
+        interrupt_before=["report"] if checkpointer else None
+    )
 
-    _module_logger.info("LangGraph built and compiled successfully")
+    _module_logger.info(f"LangGraph compiled (HITL: {bool(checkpointer)})")
 
     return compiled_graph
 
 
-def run_agent(query: str, time_window: str = "7d", language: str = "ko", max_results: int = 20) -> NewsAgentState:
+def run_agent(
+    query: str,
+    time_window: str = "7d",
+    language: str = "ko",
+    max_results: int = 20,
+    run_id: Optional[str] = None,
+    require_approval: bool = True,
+    orchestrator: Optional[Dict[str, Any]] = None,
+) -> NewsAgentState:
     """
-    뉴스 트렌드 에이전트 실행
-
-    LangGraph 공식 패턴을 따르는 메인 진입점입니다.
-
-    Args:
-        query: 검색 키워드
-        time_window: 시간 범위 (예: "24h", "7d", "30d")
-        language: 언어 코드 ("ko", "en")
-        max_results: 최대 결과 수
-
-    Returns:
-        리포트와 메트릭을 포함한 최종 상태
+    뉴스 트렌드 에이전트 실행 (HITL 지원)
     """
-    # Generate run_id
-    run_id = str(uuid.uuid4())
+    # Generate run_id if not provided
+    if not run_id:
+        run_id = str(uuid.uuid4())
 
     logger = AgentLogger("news_trend_agent", run_id)
     logger.info("Starting news trend agent", query=query, time_window=time_window, language=language)
 
-    # Create initial state (official pattern: Pydantic model)
+    # Create initial state
     initial_state = NewsAgentState(
         query=query,
         time_window=time_window,
         language=language,
         max_results=max_results,
-        run_id=run_id
+        orchestrator=orchestrator,
+        run_id=run_id,
+        report_md=None,
+        error=None,
     )
 
-    # Build and compile graph
-    graph = build_graph()
+    # Auto-disable HITL when running in non-interactive environments (e.g., Docker/API/UI)
+    if require_approval and not sys.stdin.isatty():
+        logger.warning("require_approval=True but stdin is not a TTY. Disabling HITL to avoid EOF.")
+        require_approval = False
 
-    # Invoke graph (official pattern: invoke() for synchronous execution)
+    # Setup HITL
+    checkpointer = get_checkpointer() if require_approval else None
+
+    # 2025: Plan-driven dynamic graph compilation (plan == graph structure)
+    agent_entry = get_agent_entry(orchestrator, "news_trend_agent")
+    steps = normalize_steps(agent_entry) if agent_entry else []
+    if steps:
+        graph = build_plan_runner_graph(
+            agent_name="news_trend_agent",
+            state_cls=NewsAgentState,
+            router_node=router_node,
+            op_nodes={
+                "collect": collect_node,
+                "normalize": normalize_node,
+                "analyze": analyze_node,
+                "rag": rag_node,
+                "summarize": summarize_node,
+                "report": report_node,
+                "notify": notify_node,
+            },
+            steps=steps,
+            checkpointer=checkpointer,
+        )
+        config = {"configurable": {"thread_id": run_id}}
+        try:
+            logger.info("Running workflow...")
+            current_state = graph.invoke(initial_state, config=config)
+
+            if require_approval:
+                snapshot = graph.get_state(config)
+                if snapshot.next and "report" in snapshot.next:
+                    logger.info("⏸️  Workflow paused for approval before report generation.")
+                    print("\n" + "="*50)
+                    print("✋  APPROVAL REQUIRED")
+                    print("="*50)
+                    print(f"Analysis complete for query: '{query}'")
+                    print("Summary: " + str(current_state.get("analysis", {}).get("summary", "")[:100]) + "...")
+                    print("-" * 50)
+                    while True:
+                        choice = input("Proceed to generate report? (y/n): ").strip().lower()
+                        if choice == 'y':
+                            logger.info("✅ Approved. Resuming...")
+                            current_state = graph.invoke(None, config=config)
+                            break
+                        elif choice == 'n':
+                            logger.info("🛑 Aborted by user.")
+                            return NewsAgentState(**current_state)
+                        else:
+                            print("Please enter 'y' or 'n'.")
+
+            logger.info("News trend agent completed successfully", run_id=run_id)
+            if isinstance(current_state, dict):
+                return NewsAgentState(**current_state)
+            return current_state
+        except Exception as e:
+            logger.error("News trend agent failed", error=str(e), run_id=run_id)
+            raise
+    # Optional: use advanced graph (loop/parallel/conditional edges) for 2025-style execution
+    use_advanced = os.getenv("NEWS_TREND_ADVANCED_GRAPH", "").strip().lower() in ("1", "true", "yes", "on")
+    if not use_advanced:
+        try:
+            cfg = get_config_manager()
+            agent_cfg = cfg.get_agent_config("news_trend_agent")
+            d = agent_cfg.model_dump() if agent_cfg else {}
+            use_advanced = bool(d.get("advanced_graph_enabled", False))
+        except Exception:
+            use_advanced = False
+
+    if use_advanced:
+        from src.agents.news_trend.graph_advanced import build_advanced_graph
+        graph = build_advanced_graph()
+    else:
+        graph = build_graph(checkpointer=checkpointer)
+    config = {"configurable": {"thread_id": run_id}}
+
     try:
-        final_state = graph.invoke(initial_state)
+        # 1. Start execution (runs until 'report' interrupt)
+        logger.info("Running workflow...")
+        current_state = graph.invoke(initial_state, config=config)
+        
+        # 2. Check for interrupt
+        if require_approval:
+            snapshot = graph.get_state(config)
+            if snapshot.next and "report" in snapshot.next:
+                logger.info("⏸️  Workflow paused for approval before report generation.")
+                
+                # Simple CLI interaction
+                print("\n" + "="*50)
+                print("✋  APPROVAL REQUIRED")
+                print("="*50)
+                print(f"Analysis complete for query: '{query}'")
+                print("Summary: " + str(current_state.get("analysis", {}).get("summary", "")[:100]) + "...")
+                print("-" * 50)
+                
+                while True:
+                    choice = input("Proceed to generate report? (y/n): ").strip().lower()
+                    if choice == 'y':
+                        logger.info("✅ Approved. Resuming...")
+                        current_state = graph.invoke(None, config=config)
+                        break
+                    elif choice == 'n':
+                        logger.info("🛑 Aborted by user.")
+                        return NewsAgentState(**current_state) # Return partial state
+                    else:
+                        print("Please enter 'y' or 'n'.")
+        
         logger.info("News trend agent completed successfully", run_id=run_id)
+        
+        # Ensure result is NewsAgentState
+        if isinstance(current_state, dict):
+            return NewsAgentState(**current_state)
+        return current_state
+
     except Exception as e:
         logger.error("News trend agent failed", error=str(e), run_id=run_id)
         raise
-
-    return final_state

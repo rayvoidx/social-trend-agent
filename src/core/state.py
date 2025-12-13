@@ -19,6 +19,20 @@ class AgentState(BaseModel):
     # 분석 결과
     analysis: Dict[str, Any] = Field(default_factory=dict, description="분석 결과 (감성, 키워드 등)")
 
+    # 2025: Orchestrator/Planner outputs (optional)
+    orchestrator: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="오케스트레이터(3-gear)에서 생성된 routing/plan 정보",
+    )
+    plan: Dict[str, Any] = Field(
+        default_factory=dict,
+        description="에이전트/플래너가 생성한 실행 계획(툴 사용 계획 포함)",
+    )
+    plan_execution: Dict[str, Any] = Field(
+        default_factory=dict,
+        description="실행 중 plan 상태(완료 step, 현재 step 등). 동적 계획 실행에 사용",
+    )
+
     # 출력
     report_md: Optional[str] = Field(None, description="최종 마크다운 리포트")
 

@@ -2,8 +2,8 @@
 Tools for Viral Video Agent
 """
 import os
-import logging
 import random
+import logging
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timedelta
 
@@ -11,12 +11,14 @@ from src.integrations.mcp.sns_collect import (
     fetch_tiktok_videos_via_mcp,
     fetch_youtube_videos_via_mcp,
 )
-from src.integrations.llm import get_llm_client
-from src.integrations.retrieval.vectorstore_pinecone import PineconeVectorStore
 from src.core.config import get_config_manager
+from src.core.refine import RefineEngine
+from src.core.prompts import VIRAL_ANALYSIS_PROMPT_TEMPLATE, DEFAULT_SYSTEM_PERSONA
+from src.domain.schemas import TrendInsight
+from src.integrations.llm.llm_client import get_llm_client
+from src.core.routing import ModelRole, get_model_for_role
 
 logger = logging.getLogger(__name__)
-
 
 # ============================================================================
 # Data Collection Tools
@@ -29,23 +31,15 @@ def fetch_video_stats(
 ) -> List[Dict[str, Any]]:
     """
     Fetch video statistics from YouTube/TikTok
-
-    Args:
-        platform: Platform name ("youtube", "tiktok")
-        market: Market code ("KR", "US", etc)
-        time_window: Time window (e.g., "24h", "7d")
-
-    Returns:
-        List of video statistics
     """
-    print(f"[fetch_video_stats] platform={platform}, market={market}, time_window={time_window}")
+    logger.info(f"[fetch_video_stats] platform={platform}, market={market}, time_window={time_window}")
 
     if platform == "youtube":
         return _fetch_youtube_stats(market, time_window)
     elif platform == "tiktok":
         return _fetch_tiktok_stats(market, time_window)
     else:
-        print(f"[fetch_video_stats] Unknown platform: {platform}")
+        logger.warning(f"[fetch_video_stats] Unknown platform: {platform}")
         return []
 
 
@@ -57,26 +51,29 @@ def _fetch_youtube_stats(market: str, time_window: str) -> List[Dict[str, Any]]:
         max_results=50,
     )
     if not videos:
-        # MCP 서버에서 결과를 얻지 못한 경우에만 샘플 데이터 사용
-        return _get_sample_youtube_data(market)
+        # MCP 서버에서 결과를 얻지 못한 경우 설정에 따라 폴백 결정
+        if get_config_manager().should_allow_sample_fallback():
+            return _get_sample_youtube_data(market)
+        else:
+            logger.info("ℹ️  No YouTube videos found and sample fallback disabled.")
+            return []
     return videos
 
 
 def _fetch_tiktok_stats(market: str, time_window: str) -> List[Dict[str, Any]]:
     """
     Fetch TikTok trending videos
-
-    Note: TikTok API는 공식 비즈니스 파트너십이 필요합니다.
-    현재는 샘플 데이터를 반환하지만, 실제 API 연동을 위해서는:
-    1. TikTok for Business API 액세스 신청
-    2. 또는 서드파티 데이터 제공자 사용 (예: Apify, RapidAPI)
     """
     # MCP 서버를 통해서만 TikTok 데이터를 가져옵니다.
     videos = fetch_tiktok_videos_via_mcp(query="trending", max_count=50)
     if not videos:
-        # MCP 서버에서 결과를 얻지 못한 경우에만 샘플 데이터 사용
-        print("ℹ️  Using sample TikTok data (MCP server returned no results)")
-        return _get_sample_tiktok_data(market)
+        # MCP 서버에서 결과를 얻지 못한 경우 설정에 따라 폴백 결정
+        if get_config_manager().should_allow_sample_fallback():
+            logger.info("ℹ️  Using sample TikTok data (MCP server returned no results)")
+            return _get_sample_tiktok_data(market)
+        else:
+            logger.info("ℹ️  No TikTok videos found and sample fallback disabled.")
+            return []
     return videos
 
 
@@ -139,15 +136,8 @@ def _get_sample_tiktok_data(market: str) -> List[Dict[str, Any]]:
 def detect_spike(items: List[Dict[str, Any]], threshold: float = 2.0) -> Dict[str, Any]:
     """
     Detect viral spikes using Z-score
-
-    Args:
-        items: List of video statistics
-        threshold: Z-score threshold for spike detection (default: 2.0)
-
-    Returns:
-        Spike detection results with spike_videos list
     """
-    print(f"[detect_spike] Analyzing {len(items)} videos with threshold={threshold}...")
+    logger.info(f"[detect_spike] Analyzing {len(items)} videos with threshold={threshold}...")
 
     if not items:
         return {"spike_videos": [], "mean_views": 0, "std_views": 0}
@@ -183,101 +173,13 @@ def detect_spike(items: List[Dict[str, Any]], threshold: float = 2.0) -> Dict[st
     }
 
 
-def topic_cluster(items: List[Dict[str, Any]], use_embeddings: bool = True) -> Dict[str, Any]:
+def topic_cluster(items: List[Dict[str, Any]]) -> Dict[str, Any]:
     """
-    Cluster videos by topic using embeddings or keyword-based clustering
-
-    Args:
-        items: List of video statistics
-        use_embeddings: Use Pinecone + embeddings for clustering (default: True)
-
-    Returns:
-        Topic clustering results
+    Cluster videos by topic (simple keyword-based clustering)
     """
     logger.info(f"[topic_cluster] Clustering {len(items)} videos...")
 
-    if use_embeddings:
-        try:
-            return _topic_cluster_embeddings(items)
-        except Exception as e:
-            logger.warning(f"Embedding clustering failed, falling back to keyword: {e}")
-
-    return _topic_cluster_keywords(items)
-
-
-def _topic_cluster_embeddings(items: List[Dict[str, Any]]) -> Dict[str, Any]:
-    """Cluster videos using Pinecone embeddings."""
-    cfg = get_config_manager()
-    agent_cfg = cfg.get_agent_config("viral_video_agent")
-
-    vs_cfg = agent_cfg.vector_store if agent_cfg and agent_cfg.vector_store else {}
-    index_name = vs_cfg.get("index_name", "viral-video-index")
-
-    # Get LLM client for embeddings
-    llm_client = get_llm_client(agent_name="viral_video_agent")
-    vector_store = PineconeVectorStore(index_name=index_name)
-
-    # Build corpus from video titles
-    texts = [item.get("title", "") for item in items]
-    ids = [item.get("video_id", f"vid_{i}") for i, item in enumerate(items)]
-
-    # Get embeddings
-    vectors = llm_client.get_embeddings_batch(texts)
-
-    # Prepare metadata
-    metadatas = []
-    for i, item in enumerate(items):
-        meta = {
-            "index": i,
-            "title": item.get("title", "")[:500],
-            "views": item.get("views", 0),
-            "platform": item.get("platform", "")
-        }
-        metadatas.append(meta)
-
-    # Upsert to Pinecone
-    vector_store.upsert(ids, vectors, metadatas)
-
-    # Use LLM to identify clusters
-    cluster_prompt = f"""Analyze these video titles and group them into 5-8 topic categories.
-Return a JSON object where keys are topic names (in Korean) and values are arrays of video indices.
-
-Video titles:
-{chr(10).join([f'{i}: {t}' for i, t in enumerate(texts[:50])])}
-
-Return only valid JSON."""
-
-    import json
-    response = llm_client.invoke(cluster_prompt)
-
-    try:
-        cluster_map = json.loads(response)
-    except json.JSONDecodeError:
-        return _topic_cluster_keywords(items)
-
-    # Calculate cluster statistics
-    cluster_stats = []
-    for topic, indices in cluster_map.items():
-        videos_in_cluster = [items[i] for i in indices if i < len(items)]
-        if videos_in_cluster:
-            avg_views = sum(v.get("views", 0) for v in videos_in_cluster) / len(videos_in_cluster)
-            cluster_stats.append({
-                "topic": topic,
-                "count": len(videos_in_cluster),
-                "avg_views": avg_views
-            })
-
-    cluster_stats.sort(key=lambda x: x["count"], reverse=True)
-
-    return {
-        "top_clusters": cluster_stats,
-        "total_clusters": len(cluster_stats)
-    }
-
-
-def _topic_cluster_keywords(items: List[Dict[str, Any]]) -> Dict[str, Any]:
-    """Keyword-based clustering fallback."""
-    # Simple keyword-based clustering
+    # Simple keyword-based clustering (production: use embeddings + KMeans)
     topic_keywords = {
         "음식/요리": ["recipe", "cooking", "food", "요리", "음식", "레시피"],
         "게임": ["game", "gaming", "gameplay", "게임", "플레이"],
@@ -327,28 +229,20 @@ def generate_success_factors(
     query: str,
     spike_videos: List[Dict[str, Any]],
     clusters: List[Dict[str, Any]],
-    use_llm: bool = True
+    use_llm: bool = True,
+    strategy: str = "auto",
 ) -> str:
     """
-    Generate success factors and recommendations
-
-    Args:
-        query: Original search query
-        spike_videos: List of spike videos
-        clusters: Topic cluster results
-        use_llm: Use LLM for analysis (default: True)
-
-    Returns:
-        Success factors analysis text
+    Generate success factors and recommendations (RefineEngine + gpt-5.2)
     """
-    print(f"[generate_success_factors] Analyzing {len(spike_videos)} spike videos...")
+    logger.info(f"[generate_success_factors] Analyzing {len(spike_videos)} spike videos...")
 
     # LLM 기반 분석
     if use_llm:
         try:
-            return _generate_success_factors_llm(query, spike_videos, clusters)
+            return _generate_success_factors_llm(query, spike_videos, clusters, strategy=strategy)
         except Exception as e:
-            print(f"[generate_success_factors] LLM analysis failed, falling back to template: {e}")
+            logger.error(f"[generate_success_factors] LLM analysis failed, falling back to template: {e}")
 
     # 템플릿 기반 폴백
     return _generate_success_factors_template(query, spike_videos, clusters)
@@ -357,10 +251,14 @@ def generate_success_factors(
 def _generate_success_factors_llm(
     query: str,
     spike_videos: List[Dict[str, Any]],
-    clusters: List[Dict[str, Any]]
+    clusters: List[Dict[str, Any]],
+    strategy: str = "auto",
 ) -> str:
-    """LLM 기반 성공 요인 분석"""
-    client = get_llm_client(agent_name="viral_video_agent")
+    """LLM 기반 성공 요인 분석 (RefineEngine 적용)"""
+    client = get_llm_client()
+    engine = RefineEngine(client)
+    writer_model = get_model_for_role("viral_video_agent", ModelRole.WRITER)
+    synthesizer_model = get_model_for_role("viral_video_agent", ModelRole.SYNTHESIZER)
 
     # Prepare video data
     video_summaries = []
@@ -370,11 +268,9 @@ Video {i+1}:
 - Title: {video.get('title', 'N/A')}
 - Views: {video.get('views', 0):,}
 - Likes: {video.get('likes', 0):,}
-- Comments: {video.get('comments', 0):,}
 - Z-Score: {video.get('z_score', 0):.2f}
-- Engagement Rate: {video.get('engagement_rate', 0):.2%}
 """
-        video_summaries.append(summary)
+        video_summaries.append(summary.strip())
 
     # Prepare cluster data
     cluster_summaries = []
@@ -382,41 +278,58 @@ Video {i+1}:
         summary = f"- {cluster.get('topic', 'N/A')}: {cluster.get('count', 0)} videos, avg {cluster.get('avg_views', 0):,} views"
         cluster_summaries.append(summary)
 
-    prompt = f"""Analyze these viral videos about "{query}" and provide detailed success factors.
+    prompt = VIRAL_ANALYSIS_PROMPT_TEMPLATE.format(
+        system_persona=DEFAULT_SYSTEM_PERSONA,
+        query=query,
+        video_summaries="\n".join(video_summaries),
+        cluster_summaries="\n".join(cluster_summaries) if cluster_summaries else "No clusters available"
+    )
 
-## Viral Videos Data:
-{chr(10).join(video_summaries)}
+    if str(strategy).lower() == "cheap":
+        cheap_prompt = (
+            "Write a compact Korean brief about viral video success factors.\n"
+            "Requirements:\n"
+            "- 6~10 bullets\n"
+            "- Use the provided spike/cluster evidence only\n"
+            "- No speculation; if uncertain, say '불확실'\n\n"
+            f"Query: {query}\n\n"
+            f"Spike evidence:\n{chr(10).join(video_summaries)}\n\n"
+            f"Clusters:\n{chr(10).join(cluster_summaries) if cluster_summaries else 'None'}\n"
+        )
+        return client.chat(
+            messages=[
+                {"role": "system", "content": "You are a cheap gateway summarizer. Be concise and grounded."},
+                {"role": "user", "content": cheap_prompt},
+            ],
+            temperature=0.3,
+            max_tokens=900,
+            model=synthesizer_model,
+        ).strip()
 
-## Topic Clusters:
-{chr(10).join(cluster_summaries) if cluster_summaries else "No clusters available"}
+    insight: TrendInsight = engine.refine_loop(
+        prompt=prompt,
+        initial_schema=TrendInsight,
+        criteria="데이터(조회수, Z-Score)에 기반한 구체적인 성공 요인 분석 및 콘텐츠 제작자를 위한 실행 가능한 팁 포함",
+        max_iterations=1,
+        model=writer_model,  # Model Routing
+    )
 
-Please provide a comprehensive analysis in Korean with the following structure:
-
-## 최고 성과 영상 분석
-(Analyze the top performing video)
+    return f"""
+## 바이럴 영상 분석 요약
+{insight.summary}
 
 ## 핵심 성공 요인
-(5-7 specific factors with data-backed explanations)
-1. **요인명**: 설명
-2. ...
+{chr(10).join([f"- {item}" for item in insight.key_findings])}
 
-## 콘텐츠 패턴 분석
-(Common patterns in viral content)
+## 콘텐츠 제작 가이드
+{chr(10).join([f"- {item}" for item in insight.recommendations])}
 
-## 실행 권고안
-(5-7 actionable recommendations for content creators)
-- 구체적인 실행 항목
+## 추천 키워드/해시태그
+{", ".join(insight.keywords)}
 
-## 예상 KPI
-(Expected metrics if recommendations are followed)
-
-Be specific, data-driven, and provide actionable insights."""
-
-    full_prompt = f"""You are a viral video analyst expert. Provide specific, data-driven insights in Korean.
-
-{prompt}"""
-
-    return client.invoke(full_prompt)
+---
+*분석 영향력 점수: {insight.impact_score}/10*
+"""
 
 
 def _generate_success_factors_template(

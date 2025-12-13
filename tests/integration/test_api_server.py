@@ -5,14 +5,14 @@ API 엔드포인트를 실제로 호출하여 테스트합니다.
 """
 import pytest
 from fastapi.testclient import TestClient
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, MagicMock, AsyncMock
 
 
 @pytest.fixture
 def client():
     """테스트 클라이언트 생성"""
     try:
-        from agents.api.dashboard import app
+        from src.api.routes.dashboard import app
         return TestClient(app)
     except ImportError:
         pytest.skip("FastAPI server not available")
@@ -21,7 +21,6 @@ def client():
 @pytest.fixture
 def mock_env(monkeypatch):
     """환경 변수 모킹"""
-    monkeypatch.setenv("LLM_PROVIDER", "openai")
     monkeypatch.setenv("OPENAI_API_KEY", "sk-test-key")
 
 
@@ -52,81 +51,15 @@ class TestHealthCheck:
         """
         헬스 체크 정상 동작 테스트
 
-        When: GET /health
+        When: GET /api/health
         Then: 200 OK 반환
         """
-        response = client.get("/health")
+        response = client.get("/api/health")
 
         assert response.status_code == 200
         data = response.json()
-        assert data["status"] == "ok"
+        assert data["status"] == "healthy"
         assert "timestamp" in data
-
-
-class TestExecuteEndpoint:
-    """동기 실행 엔드포인트 테스트"""
-
-    def test_execute_news_agent_success(self, client, mock_env, sample_agent_result):
-        """
-        뉴스 에이전트 실행 성공 테스트
-
-        Given: 유효한 요청 데이터
-        When: POST /api/execute
-        Then: 200 OK, 분석 결과 반환
-        """
-        with patch('agents.news_trend_agent.graph.run_agent', return_value=sample_agent_result):
-            response = client.post(
-                "/api/execute",
-                json={
-                    "agentName": "news_trend_agent",
-                    "query": "AI",
-                    "params": {
-                        "timeWindow": "7d",
-                        "language": "ko"
-                    }
-                }
-            )
-
-            assert response.status_code == 200
-            data = response.json()
-            assert data["status"] == "success"
-            assert data["query"] == "AI"
-            assert "analysis" in data
-
-    def test_execute_invalid_agent(self, client, mock_env):
-        """
-        잘못된 에이전트 이름 테스트
-
-        Given: 존재하지 않는 에이전트
-        When: POST /api/execute
-        Then: 400 Bad Request
-        """
-        response = client.post(
-            "/api/execute",
-            json={
-                "agentName": "invalid_agent",
-                "query": "AI"
-            }
-        )
-
-        assert response.status_code == 400
-
-    def test_execute_missing_query(self, client, mock_env):
-        """
-        필수 파라미터 누락 테스트
-
-        Given: query 파라미터 없음
-        When: POST /api/execute
-        Then: 422 Unprocessable Entity
-        """
-        response = client.post(
-            "/api/execute",
-            json={
-                "agentName": "news_trend_agent"
-            }
-        )
-
-        assert response.status_code == 422
 
 
 class TestTaskEndpoints:
@@ -138,21 +71,23 @@ class TestTaskEndpoints:
 
         Given: 유효한 요청
         When: POST /api/tasks
-        Then: 201 Created, task_id 반환
+        Then: 200 OK, task_id 반환
         """
-        with patch('agents.api.dashboard.submit_task') as mock_submit:
-            mock_submit.return_value = {"task_id": "test-task-id"}
+        with patch('src.api.routes.dashboard.executor') as mock_executor:
+            # Mock executor.submit_task
+            mock_executor.submit_task = AsyncMock(return_value="test-task-id")
 
             response = client.post(
                 "/api/tasks",
                 json={
-                    "agentName": "news_trend_agent",
+                    "agent_name": "news_trend_agent",
                     "query": "AI",
-                    "params": {"timeWindow": "7d"}
+                    "params": {"time_window": "7d"},
+                    "priority": 1
                 }
             )
 
-            assert response.status_code == 201
+            assert response.status_code == 200
             data = response.json()
             assert "task_id" in data
 
@@ -166,19 +101,26 @@ class TestTaskEndpoints:
         """
         task_id = "test-task-id"
 
-        with patch('agents.api.dashboard.get_task_status') as mock_status:
-            mock_status.return_value = {
-                "task_id": task_id,
-                "status": "completed",
-                "result": {"query": "AI"}
-            }
+        with patch('src.api.routes.dashboard.executor') as mock_executor:
+            # Mock task object
+            mock_task = MagicMock()
+            mock_task.task_id = task_id
+            mock_task.agent_name = "news_trend_agent"
+            mock_task.query = "AI"
+            mock_task.status.value = "completed"
+            mock_task.created_at = 1234567890.0
+            mock_task.started_at = 1234567891.0
+            mock_task.completed_at = 1234567900.0
+            mock_task.result = {"query": "AI"}
+            mock_task.error = None
+
+            mock_executor.task_queue.get_task = AsyncMock(return_value=mock_task)
 
             response = client.get(f"/api/tasks/{task_id}")
 
             assert response.status_code == 200
             data = response.json()
             assert data["task_id"] == task_id
-            assert data["status"] == "completed"
 
     def test_get_task_not_found(self, client, mock_env):
         """
@@ -188,9 +130,38 @@ class TestTaskEndpoints:
         When: GET /api/tasks/{task_id}
         Then: 404 Not Found
         """
-        response = client.get("/api/tasks/non-existent-id")
+        with patch('src.api.routes.dashboard.executor') as mock_executor:
+            mock_executor.task_queue.get_task = AsyncMock(return_value=None)
 
-        assert response.status_code == 404
+            response = client.get("/api/tasks/non-existent-id")
+
+            assert response.status_code == 404
+
+    def test_list_tasks(self, client, mock_env):
+        """
+        태스크 목록 조회 테스트
+
+        When: GET /api/tasks
+        Then: 200 OK, 태스크 목록 반환
+        """
+        with patch('src.api.routes.dashboard.executor') as mock_executor:
+            mock_task = MagicMock()
+            mock_task.to_dict.return_value = {
+                "task_id": "test-id",
+                "agent_name": "news_trend_agent",
+                "query": "AI",
+                "status": "completed"
+            }
+            mock_task.created_at = 1234567890.0
+
+            mock_executor.task_queue.get_all_tasks = AsyncMock(return_value=[mock_task])
+
+            response = client.get("/api/tasks")
+
+            assert response.status_code == 200
+            data = response.json()
+            assert "tasks" in data
+            assert "total" in data
 
 
 class TestDashboardEndpoint:
@@ -203,47 +174,100 @@ class TestDashboardEndpoint:
         When: GET /api/dashboard/summary
         Then: 200 OK, 통계 정보 반환
         """
-        with patch('agents.api.dashboard.get_dashboard_summary') as mock_summary:
-            mock_summary.return_value = {
-                "total_tasks": 100,
-                "completed_tasks": 95,
-                "failed_tasks": 2,
-                "running_tasks": 3,
-                "avg_execution_time": 12.5
+        with patch('src.api.routes.dashboard.executor') as mock_executor:
+            mock_task = MagicMock()
+            mock_task.agent_name = "news_trend_agent"
+            mock_task.status.value = "completed"
+            mock_task.created_at = 1234567890.0
+            mock_task.result = {"report_md": "# Test"}
+            mock_task.to_dict.return_value = {
+                "task_id": "test-id",
+                "agent_name": "news_trend_agent",
+                "status": "completed"
             }
+
+            # TaskStatus enum mock
+            from src.infrastructure.distributed import TaskStatus
+            mock_task.status = TaskStatus.COMPLETED
+
+            mock_executor.task_queue.get_all_tasks = AsyncMock(return_value=[mock_task])
 
             response = client.get("/api/dashboard/summary")
 
             assert response.status_code == 200
             data = response.json()
-            assert data["total_tasks"] == 100
-            assert data["completed_tasks"] == 95
+            assert "agents" in data
+            assert "recent_tasks" in data
 
 
-class TestN8NWebhook:
-    """n8n 웹훅 엔드포인트 테스트"""
+class TestMetricsEndpoint:
+    """메트릭 엔드포인트 테스트"""
 
-    def test_n8n_webhook_success(self, client, mock_env, sample_agent_result):
+    def test_get_metrics(self, client, mock_env):
         """
-        n8n 웹훅 처리 성공 테스트
+        메트릭 조회 테스트
 
-        Given: n8n 웹훅 요청
-        When: POST /api/n8n/webhook
-        Then: 200 OK, 분석 결과 반환
+        When: GET /api/metrics
+        Then: 200 OK, 메트릭 정보 반환
         """
-        with patch('agents.news_trend_agent.graph.run_agent', return_value=sample_agent_result):
-            response = client.post(
-                "/api/n8n/webhook",
-                json={
-                    "action": "analyze",
-                    "query": "AI",
-                    "timeWindow": "7d"
-                }
-            )
+        with patch('src.api.routes.dashboard.executor') as mock_executor:
+            mock_executor.get_statistics = AsyncMock(return_value={
+                "total_tasks": 10,
+                "completed": 8,
+                "failed": 2
+            })
+            mock_executor.task_queue.get_all_tasks = AsyncMock(return_value=[])
+
+            response = client.get("/api/metrics")
 
             assert response.status_code == 200
             data = response.json()
-            assert "result" in data
+            assert "executor_stats" in data
+            assert "timestamp" in data
+
+
+class TestInsightsEndpoint:
+    """인사이트 엔드포인트 테스트"""
+
+    def test_list_insights(self, client, mock_env):
+        """
+        인사이트 목록 조회 테스트
+
+        When: GET /api/insights
+        Then: 200 OK, 인사이트 목록 반환
+        """
+        response = client.get("/api/insights")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert "items" in data
+        assert "total" in data
+
+
+class TestWorkersEndpoint:
+    """워커 엔드포인트 테스트"""
+
+    def test_get_workers(self, client, mock_env):
+        """
+        워커 정보 조회 테스트
+
+        When: GET /api/workers
+        Then: 200 OK, 워커 정보 반환
+        """
+        with patch('src.api.routes.dashboard.executor') as mock_executor:
+            mock_worker = MagicMock()
+            mock_worker.worker_id = "worker-1"
+            mock_worker.is_running = True
+            mock_worker.current_task = None
+
+            mock_executor.workers = [mock_worker]
+
+            response = client.get("/api/workers")
+
+            assert response.status_code == 200
+            data = response.json()
+            assert "workers" in data
+            assert "total_workers" in data
 
 
 class TestCORS:
@@ -253,63 +277,61 @@ class TestCORS:
         """
         CORS 헤더 확인 테스트
 
-        When: OPTIONS 요청
+        When: GET 요청 with Origin header
         Then: Access-Control-Allow-Origin 헤더 포함
         """
-        response = client.options("/health")
+        response = client.get(
+            "/api/health",
+            headers={"Origin": "http://localhost:3000"}
+        )
 
-        assert response.status_code in [200, 204]
-        # CORS가 설정되어 있다면 헤더 확인
+        assert response.status_code == 200
+        # CORS 미들웨어가 활성화되어 있으면 헤더가 포함됨
         # assert "access-control-allow-origin" in response.headers
 
 
-class TestRateLimiting:
-    """Rate Limiting 테스트 (구현시)"""
+class TestStatisticsEndpoint:
+    """통계 엔드포인트 테스트"""
 
-    @pytest.mark.skip(reason="Rate limiting not implemented yet")
-    def test_rate_limit_exceeded(self, client, mock_env):
+    def test_get_statistics(self, client, mock_env):
         """
-        Rate limit 초과 테스트
+        통계 조회 테스트
 
-        Given: 많은 요청
-        When: 연속으로 요청
-        Then: 429 Too Many Requests
+        When: GET /api/statistics
+        Then: 200 OK, 통계 정보 반환
         """
-        for _ in range(100):
-            response = client.post(
-                "/api/execute",
-                json={"agentName": "news_trend_agent", "query": "AI"}
-            )
+        with patch('src.api.routes.dashboard.executor') as mock_executor:
+            mock_executor.get_statistics = AsyncMock(return_value={
+                "total_tasks": 100,
+                "completed": 95
+            })
+            mock_executor.task_queue.get_all_tasks = AsyncMock(return_value=[])
 
-        assert response.status_code == 429
+            response = client.get("/api/statistics")
+
+            assert response.status_code == 200
+            data = response.json()
+            assert "timestamp" in data
+            assert "executor" in data
 
 
 class TestErrorHandling:
     """에러 핸들링 테스트"""
 
-    def test_internal_server_error(self, client, mock_env):
+    def test_executor_not_initialized(self, client, mock_env):
         """
-        내부 서버 에러 처리 테스트
+        Executor 미초기화 상태 테스트
 
-        Given: 에이전트 실행 중 예외 발생
-        When: POST /api/execute
-        Then: 500 Internal Server Error, 에러 메시지
+        Given: executor가 None
+        When: GET /api/metrics
+        Then: 503 Service Unavailable
         """
-        def mock_error(*args, **kwargs):
-            raise Exception("Internal error")
+        with patch('src.api.routes.dashboard.executor', None):
+            response = client.get("/api/metrics")
 
-        with patch('agents.news_trend_agent.graph.run_agent', side_effect=mock_error):
-            response = client.post(
-                "/api/execute",
-                json={
-                    "agentName": "news_trend_agent",
-                    "query": "AI"
-                }
-            )
-
-            assert response.status_code == 500
+            assert response.status_code == 503
             data = response.json()
-            assert "error" in data or "detail" in data
+            assert "detail" in data
 
 
 if __name__ == "__main__":

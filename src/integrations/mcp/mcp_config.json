@@ -29,7 +29,7 @@
     },
     "supadata-ai-mcp": {
       "command": "npx",
-      "args": ["-y", "@supadata/mcp"],
+      "args": ["-y", "supadata-mcp"],
       "env": {
         "SUPADATA_API_KEY": "${SUPADATA_API_KEY}"
       },
@@ -37,8 +37,8 @@
     }
   },
   "defaults": {
-    "timeout": 0,
-    "retries": 5
+    "timeout": 30000,
+    "retries": 3
   },
   "logging": {
     "level": "info",

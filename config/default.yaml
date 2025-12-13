@@ -3,7 +3,7 @@ debug: true
 
 llm:
   provider: openai
-  model_name: ${OPENAI_MODEL_NAME:-gpt-4o}
+  model_name: ${OPENAI_MODEL_NAME:-gpt-5.2}
   temperature: 0.7
 
 agents:
@@ -11,10 +11,19 @@ agents:
     name: news_trend_agent
     enabled: true
     max_concurrent_tasks: 10
-    timeout_seconds: 0
+    timeout_seconds: 300
+    advanced_graph_enabled: false
+    # Compound AI (2025): role-based model assignment for cost-efficiency
+    model_roles:
+      router: ${MODEL__ROUTER:-gpt-5-mini}
+      planner: ${MODEL__PLANNER:-o3}
+      synthesizer: ${MODEL__SYNTHESIZER:-gpt-5-mini}
+      writer: ${MODEL__WRITER:-gpt-5.2}
+      sentiment: ${MODEL__SENTIMENT:-gpt-5-mini}
+      tool: ${MODEL__TOOL:-gpt-5-mini}
     llm:
       provider: openai
-      model_name: ${OPENAI_MODEL_NAME:-gpt-4o}
+      model_name: ${OPENAI_MODEL_NAME:-gpt-5.2}
       temperature: 0.5
     embedding:
       provider: openai
@@ -27,10 +36,17 @@ agents:
     name: viral_video_agent
     enabled: true
     max_concurrent_tasks: 10
-    timeout_seconds: 0
+    timeout_seconds: 300
+    model_roles:
+      router: ${MODEL__ROUTER:-gpt-5-mini}
+      planner: ${MODEL__PLANNER:-o3}
+      synthesizer: ${MODEL__SYNTHESIZER:-gpt-5-mini}
+      writer: ${MODEL__WRITER:-gpt-5.2}
+      sentiment: ${MODEL__SENTIMENT:-gpt-5-mini}
+      tool: ${MODEL__TOOL:-gpt-5-mini}
     llm:
       provider: google
-      model_name: ${GEMINI_MODEL_NAME:-gemini-1.5-pro}
+      model_name: ${GEMINI_MODEL_NAME:-gemini-2.5-pro}
       temperature: 0.6
     embedding:
       provider: google
@@ -43,10 +59,17 @@ agents:
     name: social_trend_agent
     enabled: true
     max_concurrent_tasks: 10
-    timeout_seconds: 0
+    timeout_seconds: 300
+    model_roles:
+      router: ${MODEL__ROUTER:-gpt-5-mini}
+      planner: ${MODEL__PLANNER:-o3}
+      synthesizer: ${MODEL__SYNTHESIZER:-gpt-5-mini}
+      writer: ${MODEL__WRITER:-gpt-5.2}
+      sentiment: ${MODEL__SENTIMENT:-gpt-5-mini}
+      tool: ${MODEL__TOOL:-gpt-5-mini}
     llm:
       provider: anthropic
-      model_name: ${ANTHROPIC_MODEL_NAME:-claude-3-5-sonnet-20241022}
+      model_name: ${ANTHROPIC_MODEL_NAME:-claude-sonnet-4-5}
       temperature: 0.5
     embedding:
       provider: voyage

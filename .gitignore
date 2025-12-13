@@ -129,6 +129,9 @@ artifacts/**/*
 !artifacts/.gitkeep
 !artifacts/**/.gitkeep
 
+# Legacy: runtime outputs accidentally written under src/artifacts/
+src/artifacts/**/*
+
 # Logs directory: keep placeholder only
 !logs/
 !logs/.gitkeep

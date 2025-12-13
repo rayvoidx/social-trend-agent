@@ -18,12 +18,11 @@
 import os
 import json
 import yaml
-from typing import Dict, Any, Optional, List, Type
+from typing import Dict, Any, Optional
 from pathlib import Path
-from dataclasses import dataclass, field
 from enum import Enum
 import logging
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings
 
 logger = logging.getLogger(__name__)
@@ -53,7 +52,7 @@ class LLMProvider(str, Enum):
 class LLMConfig(BaseModel):
     """LLM 설정"""
     provider: LLMProvider = Field(default=LLMProvider.AZURE_OPENAI)
-    model_name: str = Field(default="gpt-4")
+    model_name: str = Field(default="gpt-5.2")
     temperature: float = Field(default=0.7, ge=0.0, le=2.0)
     max_tokens: int = Field(default=4000, gt=0)
     timeout: int = Field(default=120, gt=0)
@@ -62,7 +61,9 @@ class LLMConfig(BaseModel):
     api_key: Optional[str] = None
     api_base: Optional[str] = None
     deployment_name: Optional[str] = None
-    api_version: Optional[str] = "2024-02-15-preview"
+    # Azure OpenAI data-plane inference api-version (GA)
+    # Ref: https://learn.microsoft.com/en-us/azure/ai-services/openai/reference
+    api_version: Optional[str] = "2024-10-21"
 
     class Config:
         use_enum_values = True
@@ -136,6 +137,11 @@ class AgentConfig(BaseModel):
     llm: Optional[LLMConfig] = None
     embedding: Optional[Dict[str, Any]] = None
     vector_store: Optional[Dict[str, Any]] = None
+    # Compound AI model-role routing (optional)
+    # e.g., {"router": "gpt-5-mini", "planner": "gpt-5.2", "synthesizer": "gpt-5-mini", "writer": "gpt-5.2"}
+    model_roles: Optional[Dict[str, str]] = None
+    # 2025: advanced LangGraph execution (loop/parallel/conditional edges)
+    advanced_graph_enabled: bool = False
 
 
 class SystemConfig(BaseSettings):
@@ -147,6 +153,10 @@ class SystemConfig(BaseSettings):
     # Environment
     environment: Environment = Field(default=Environment.DEVELOPMENT)
     debug: bool = False
+
+    # Feature Flags
+    # 운영 환경에서는 반드시 False여야 함. 개발 중 API 키 없을 때 가짜 데이터 반환 허용 여부.
+    allow_sample_fallback: bool = Field(default=True)
 
     # LLM
     llm: LLMConfig = Field(default_factory=LLMConfig)
@@ -274,33 +284,39 @@ class ConfigManager:
             raise
 
     def _load_default_config(self) -> Dict[str, Any]:
-        """Load default configuration"""
+        """Load default configuration."""
         # Try loading from file
         if self.default_config_path.exists():
-            return self._load_file(self.default_config_path)
+            loaded = self._load_file(self.default_config_path)
+            if loaded is not None:
+                return loaded
 
         # Return hardcoded defaults
+        # Production 환경에서는 샘플 폴백 비활성화
+        is_prod = self.environment == Environment.PRODUCTION
+        
         return {
             "environment": self.environment.value,
             "debug": False,
+            "allow_sample_fallback": not is_prod,  # Production에서는 기본값 False
             "llm": {
                 "provider": "openai",
-                "model_name": "gpt-5.1",
-                "max_tokens": 4000
+                "model_name": "gpt-5.2",
+                "max_tokens": 4000,
             },
             "cache": {
                 "enabled": True,
                 "ttl_seconds": 3600,
-                "use_disk": False
+                "use_disk": False,
             },
             "retry": {
                 "max_retries": 3,
-                "backoff_factor": 0.5
+                "backoff_factor": 0.5,
             },
             "monitoring": {
                 "enabled": True,
-                "log_level": "INFO"
-            }
+                "log_level": "INFO",
+            },
         }
 
     def _expand_env_vars(self, data: Any) -> Any:
@@ -325,7 +341,10 @@ class ConfigManager:
             return data
 
     def _load_file(self, filepath: Path) -> Optional[Dict[str, Any]]:
-        """Load configuration file (YAML or JSON)"""
+        """Load configuration file (YAML or JSON).
+
+        파일이 없거나 로드에 실패하면 None을 반환합니다.
+        """
         if not filepath.exists():
             return None
 
@@ -340,7 +359,8 @@ class ConfigManager:
                     return None
 
                 # Expand environment variables
-                return self._expand_env_vars(data)
+                expanded = self._expand_env_vars(data)
+                return expanded if isinstance(expanded, dict) else None
         except Exception as e:
             logger.error(f"Failed to load config from {filepath}: {e}")
             return None
@@ -437,6 +457,10 @@ class ConfigManager:
         """Check if debug mode enabled"""
         return self.config.debug if self.config else False
 
+    def should_allow_sample_fallback(self) -> bool:
+        """Check if sample data fallback is allowed"""
+        return self.config.allow_sample_fallback if self.config else False
+
 
 # ============================================================================
 # Global config instance (singleton pattern)
@@ -491,9 +515,10 @@ if __name__ == "__main__":
     default_config = {
         "environment": "development",
         "debug": True,
+        "allow_sample_fallback": True,
         "llm": {
             "provider": "azure_openai",
-            "model_name": "gpt-4",
+            "model_name": "gpt-5.2",
             "temperature": 0.7,
             "api_base": os.getenv("OPENAI_API_BASE"),
             "api_key": os.getenv("OPENAI_API_KEY")
@@ -546,6 +571,7 @@ if __name__ == "__main__":
     print(f"\nLLM Provider: {config_manager.get_llm_config().provider}")
     print(f"Environment: {config_manager.environment.value}")
     print(f"Debug mode: {config_manager.is_debug()}")
+    print(f"Sample Fallback: {config_manager.should_allow_sample_fallback()}")
 
     # Get agent config
     agent_config = config_manager.get_agent_config("news_trend_agent")

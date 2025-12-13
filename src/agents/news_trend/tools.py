@@ -2,9 +2,11 @@
 뉴스 트렌드 에이전트를 위한 도구
 
 Phase 3 유틸리티 통합: 재시도, 캐싱, 로깅
+Phase 6 구조화 출력 및 Self-Refine
+Phase 10 컨텍스트 프롬프트 고도화 (Wrtn Style)
 """
-# mypy: ignore-errors
 import os
+import json
 import logging
 from typing import List, Dict, Any, Tuple, Optional
 from datetime import datetime, timedelta
@@ -14,16 +16,20 @@ import re
 from src.infrastructure.retry import backoff_retry
 from src.infrastructure.cache import cached
 from src.core.config import get_config_manager
-from src.integrations.llm import get_llm_client
-from src.integrations.retrieval.vectorstore_pinecone import PineconeVectorStore
+from src.core.utils import parse_timestamp, deduplicate_items
+from src.core.refine import RefineEngine
+from src.core.prompts import REPORT_GENERATION_PROMPT_TEMPLATE, DEFAULT_SYSTEM_PERSONA # Phase 10
+from src.core.routing import ModelRole, get_model_for_role
+from src.domain.plan import AgentPlan
+from src.domain.schemas import TrendInsight
+from src.integrations.retrieval.rag import RAGSystem
 from src.integrations.mcp.news_collect import search_news_via_mcp
+from src.integrations.llm import get_llm_client
 
 # LangChain for LLM integration (뉴스 에이전트는 LangChain 기반 요약 체인을 유지)
 from langchain_anthropic import ChatAnthropic
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_openai import AzureChatOpenAI, ChatOpenAI
-from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.output_parsers import StrOutputParser
 
 # Initialize module-level logger (without run_id for module-level logging)
 logger = logging.getLogger("news_trend_agent")
@@ -59,20 +65,41 @@ def search_news(
     )
 
     # MCP 서버(brave-search 등)를 통해서만 뉴스 검색을 수행
+    # 중복 제거를 위해 max_results보다 넉넉하게 요청
     news_items = search_news_via_mcp(
         query=query,
         time_window=time_window,
         language=language,
-        max_results=max_results,
+        max_results=max_results * 2,
     )
 
-    # MCP 결과가 없으면 샘플 데이터로 폴백
+    # MCP 결과가 없으면 설정에 따라 샘플 데이터로 폴백하거나 빈 결과 반환
     if not news_items:
-        logger.warning("No news items from MCP, using sample data")
-        news_items = _get_sample_news(query, time_window, language)
+        if get_config_manager().should_allow_sample_fallback():
+            logger.warning("No news items from MCP, using sample data")
+            news_items = _get_sample_news(query, time_window, language)
+        else:
+            logger.info("No news items found and sample fallback disabled.")
+            return []
 
-    logger.info(f"News search completed: total_results={len(news_items)}")
-    return news_items[:max_results]
+    # 중복 제거
+    unique_items = deduplicate_items(news_items, unique_keys=["url", "link", "id"])
+    
+    # 타임스탬프 파싱 및 데이터 정규화
+    final_items = []
+    for item in unique_items[:max_results]:
+        # 날짜 파싱 (기존 publishedAt은 유지하고 parsed_timestamp 추가)
+        pub_str = item.get("publishedAt") or item.get("published_at") or item.get("pubDate")
+        ts = parse_timestamp(pub_str)
+        
+        item["published_timestamp"] = ts
+        if not item.get("publishedAt") and pub_str:
+             item["publishedAt"] = pub_str # Ensure publishedAt exists if we found it elsewhere
+             
+        final_items.append(item)
+
+    logger.info(f"News search completed: total_results={len(final_items)}")
+    return final_items
 
 
 def _parse_time_window(time_window: str) -> str:
@@ -89,9 +116,6 @@ def _parse_time_window(time_window: str) -> str:
         from_date = now - timedelta(days=7)
 
     return from_date.strftime("%Y-%m-%d")
-
-
-
 
 
 def _get_sample_news(query: str, time_window: str, language: str) -> List[Dict[str, Any]]:
@@ -164,9 +188,9 @@ def analyze_sentiment(items: List[Dict[str, Any]], use_llm: bool = True) -> Dict
 
 def _analyze_sentiment_llm(items: List[Dict[str, Any]]) -> Dict[str, Any]:
     """LLM 기반 감성 분석"""
-    from src.integrations.llm import get_llm_client
+    # client = get_llm_client() # Already imported at top level
 
-    client = get_llm_client(agent_name="news_trend_agent")
+    client = get_llm_client()
 
     # Prepare texts for analysis
     texts = []
@@ -191,12 +215,14 @@ Return JSON format:
     "summary": "brief overall sentiment summary"
 }}"""
 
+    sentiment_model = get_model_for_role("news_trend_agent", ModelRole.SENTIMENT)
     result = client.chat_json(
         messages=[
             {"role": "system", "content": "You are a sentiment analysis expert. Analyze Korean and English text accurately."},
             {"role": "user", "content": prompt}
         ],
-        temperature=0.2
+        temperature=0.2,
+        model=sentiment_model  # Model Routing: sentiment role (safe fallback handled in llm_client)
     )
 
     total = len(items)
@@ -285,15 +311,25 @@ def extract_keywords(items: List[Dict[str, Any]], use_tfidf: bool = True) -> Dic
 
 
 def _extract_keywords_tfidf(items: List[Dict[str, Any]]) -> Dict[str, Any]:
-    """TF-IDF 기반 키워드 추출 (sklearn 없이 경량 구현)."""
-    import math
+    """TF-IDF 기반 키워드 추출"""
+    try:
+        from sklearn.feature_extraction.text import TfidfVectorizer # type: ignore[import]
+        import numpy as np
+    except ImportError:
+        logger.warning("scikit-learn not installed, falling back to frequency-based")
+        return _extract_keywords_frequency(items)
 
-    # Prepare tokenized documents
-    documents: List[List[str]] = []
-    doc_freq: Dict[str, int] = {}
+    # Prepare documents
+    documents = []
+    for item in items:
+        text = f"{item.get('title', '')} {item.get('description', '')} {item.get('content', '')}"
+        documents.append(text)
+
+    if not documents:
+        return {"top_keywords": [], "total_unique_keywords": 0}
 
     # Korean + English stop words
-    stop_words = {
+    stop_words = [
         # Korean
         "은", "는", "이", "가", "을", "를", "에", "의", "와", "과", "도", "로", "으로",
         "에서", "까지", "부터", "만", "뿐", "다", "고", "며", "면", "지", "든", "니",
@@ -306,59 +342,52 @@ def _extract_keywords_tfidf(items: List[Dict[str, Any]]) -> Dict[str, Any]:
         "what", "which", "who", "when", "where", "why", "how", "all",
         "each", "every", "both", "few", "more", "most", "other", "some",
         "such", "no", "nor", "not", "only", "own", "same", "so", "than",
-        "too", "very", "just", "also", "now", "said", "says",
-    }
-
-    for item in items:
-        text = f"{item.get('title', '')} {item.get('description', '')} {item.get('content', '')}"
-        tokens = re.findall(r"[가-힣a-zA-Z]{2,}", text.lower())
-        tokens = [t for t in tokens if t not in stop_words]
-        if not tokens:
-            continue
-        documents.append(tokens)
-
-        # Update document frequency (per unique token in this document)
-        for token in set(tokens):
-            doc_freq[token] = doc_freq.get(token, 0) + 1
-
-    if not documents:
-        return {"top_keywords": [], "total_unique_keywords": 0}
-
-    num_docs = len(documents)
-
-    # Compute TF-IDF scores
-    tfidf_scores: Dict[str, float] = {}
-    for tokens in documents:
-        doc_len = len(tokens)
-        counts: Dict[str, int] = {}
-        for t in tokens:
-            counts[t] = counts.get(t, 0) + 1
-
-        for token, cnt in counts.items():
-            tf = cnt / doc_len
-            df = doc_freq.get(token, 1)
-            idf = math.log(num_docs / df) + 1.0
-            tfidf_scores[token] = tfidf_scores.get(token, 0.0) + tf * idf
-
-    # Sort by TF-IDF score
-    sorted_keywords = sorted(tfidf_scores.items(), key=lambda x: x[1], reverse=True)
-
-    top_keywords = [
-        {
-            "keyword": kw,
-            "score": round(score, 4),
-            "count": doc_freq.get(kw, 0),
-        }
-        for kw, score in sorted_keywords[:20]
-        if score > 0
+        "too", "very", "just", "also", "now", "said", "says"
     ]
 
-    return {
-        "top_keywords": top_keywords,
-        "total_unique_keywords": len(tfidf_scores),
-        "method": "tfidf",
-        "ngram_range": "1-1",
-    }
+    # TF-IDF Vectorizer
+    vectorizer = TfidfVectorizer(
+        max_features=100,
+        stop_words=stop_words,
+        ngram_range=(1, 2),  # Unigrams and bigrams
+        min_df=1,
+        max_df=0.9,
+        token_pattern=r'(?u)\b[가-힣a-zA-Z]{2,}\b'  # Korean + English, min 2 chars
+    )
+
+    try:
+        tfidf_matrix = vectorizer.fit_transform(documents)
+        feature_names = vectorizer.get_feature_names_out()
+
+        # Calculate average TF-IDF score across all documents
+        avg_scores = np.asarray(tfidf_matrix.mean(axis=0)).flatten()
+
+        # Create keyword list with scores
+        keyword_scores = list(zip(feature_names, avg_scores))
+        keyword_scores.sort(key=lambda x: x[1], reverse=True)
+
+        # Get top keywords
+        top_keywords = [
+            {"keyword": kw, "score": round(float(score), 4), "count": int((tfidf_matrix[:, i].toarray() > 0).sum())}
+            for i, (kw, score) in enumerate(keyword_scores[:20])
+            if score > 0.01
+        ]
+
+        # Also extract document frequency for reference
+        doc_freq = {}
+        for i, kw in enumerate(feature_names):
+            doc_freq[kw] = int((tfidf_matrix[:, i].toarray() > 0).sum())
+
+        return {
+            "top_keywords": top_keywords,
+            "total_unique_keywords": len(feature_names),
+            "method": "tfidf",
+            "ngram_range": "1-2"
+        }
+
+    except Exception as e:
+        logger.error(f"TF-IDF vectorization failed: {e}")
+        return _extract_keywords_frequency(items)
 
 
 def _extract_keywords_frequency(items: List[Dict[str, Any]]) -> Dict[str, Any]:
@@ -419,27 +448,32 @@ def _get_llm():
         deployment_name = (
             agent_cfg.llm.deployment_name
             if agent_cfg and agent_cfg.llm and agent_cfg.llm.deployment_name
-            else os.getenv("OPENAI_DEPLOYMENT_NAME", "gpt-5.1")
+            else os.getenv("OPENAI_DEPLOYMENT_NAME", "gpt-5.2")
         )
         return AzureChatOpenAI(
             deployment_name=deployment_name,
             temperature=0.7,
+            max_tokens=1000,
         )
     elif provider == "openai":
-        model = model_name or os.getenv("OPENAI_MODEL_NAME", "gpt-5.1")
+        # Ref: https://platform.openai.com/docs/models (GPT-4 Turbo Preview is deprecated)
+        model = model_name or os.getenv("OPENAI_MODEL_NAME", "gpt-5.2")
         return ChatOpenAI(
             model=model,
             temperature=0.7,
+            max_tokens=1000,
         )
     elif provider == "anthropic":
-        model = model_name or os.getenv("ANTHROPIC_MODEL_NAME", "claude-3-opus-20240229")
+        # Ref: https://docs.anthropic.com/en/docs/about-claude/models
+        model = model_name or os.getenv("ANTHROPIC_MODEL_NAME", "claude-sonnet-4-5")
         return ChatAnthropic(
             model=model,
             temperature=0.7,
             max_tokens=1000,
         )
     elif provider == "google":
-        model = model_name or os.getenv("GOOGLE_MODEL_NAME", "gemini-pro")
+        # Ref: https://ai.google.dev/gemini-api/docs/models
+        model = model_name or os.getenv("GOOGLE_MODEL_NAME", "gemini-2.5-pro")
         return ChatGoogleGenerativeAI(
             model=model,
             temperature=0.7,
@@ -448,10 +482,11 @@ def _get_llm():
     else:
         # Fallback to Azure OpenAI
         logger.warning(f"Unknown LLM provider '{provider}', falling back to Azure OpenAI")
-        deployment_name = os.getenv("OPENAI_DEPLOYMENT_NAME", "gpt-5.1")
+        deployment_name = os.getenv("OPENAI_DEPLOYMENT_NAME", "gpt-5.2")
         return AzureChatOpenAI(
             deployment_name=deployment_name,
             temperature=0.7,
+            max_tokens=1000,
         )
 
 
@@ -459,12 +494,11 @@ def _get_llm():
 def summarize_trend(
     query: str,
     normalized_items: List[Dict[str, Any]],
-    analysis: Dict[str, Any]
+    analysis: Dict[str, Any],
+    strategy: str = "auto",
 ) -> str:
     """
-    LLM을 활용한 트렌드 인사이트 요약
-
-    LCEL(LangChain Expression Language)을 사용하는 LangChain 공식 패턴을 적용합니다.
+    LLM을 활용한 트렌드 인사이트 요약 (구조화된 출력 및 Self-Refine 적용)
 
     Args:
         query: 원본 검색 쿼리
@@ -472,7 +506,7 @@ def summarize_trend(
         analysis: 분석 결과 (감성, 키워드)
 
     Returns:
-        LLM이 생성한 트렌드 요약 텍스트
+        LLM이 생성한 트렌드 요약 텍스트 (Markdown 형식)
     """
     logger.info(f"Starting trend summarization: query={query}, item_count={len(normalized_items)}")
 
@@ -486,71 +520,150 @@ def summarize_trend(
     keywords_str = ", ".join([kw["keyword"] for kw in keywords[:10]])
     headlines_str = "\n".join([f"- {headline}" for headline in top_headlines])
 
-    # Import prompts from prompts.py for better management
-    try:
-        from src.agents.news_trend.prompts import get_system_prompt
-        system_prompt_text = get_system_prompt()
-    except ImportError:
-        logger.warning("Failed to import prompts.py, using default prompt")
-        system_prompt_text = """당신은 소비자 트렌드 분석 전문가입니다.
-주어진 뉴스 데이터를 분석하여 마케팅 및 상품 기획팀이 활용할 수 있는 핵심 인사이트를 제공하세요.
-
-응답 형식:
-1. 전반적인 트렌드 요약 (2-3문장)
-2. 주요 발견사항 (3-5개 bullet points)
-3. 실행 가능한 권고안 (3-5개 bullet points)
-
-명확하고 실용적인 분석을 제공하세요."""
-
-    # Create prompt using LangChain ChatPromptTemplate (official pattern)
-    prompt = ChatPromptTemplate.from_messages([
-        ("system", system_prompt_text),
-        ("user", """다음 데이터를 분석해주세요:
-
-**검색어**: {query}
-
-**감성 분석 결과**:
-- 긍정: {positive}건 ({positive_pct:.1f}%)
-- 중립: {neutral}건 ({neutral_pct:.1f}%)
-- 부정: {negative}건 ({negative_pct:.1f}%)
-
-**주요 키워드**: {keywords}
-
-**주요 뉴스 헤드라인**:
-{headlines}
-
-위 데이터를 바탕으로 트렌드 분석 리포트를 작성하세요.""")
-    ])
+    # Phase 10: Use Enhanced Prompt Template
+    prompt = REPORT_GENERATION_PROMPT_TEMPLATE.format(
+        system_persona=DEFAULT_SYSTEM_PERSONA,
+        query=query,
+        positive_pct=sentiment.get('positive_pct', 0),
+        negative_pct=sentiment.get('negative_pct', 0),
+        neutral_pct=sentiment.get('neutral_pct', 0),
+        keywords_str=keywords_str,
+        headlines_str=headlines_str
+    )
 
     try:
-        # Get LLM instance
-        llm = _get_llm()
+        # Router can pass strategy via analysis["_routing"]["summary_strategy"].
+        routed = (analysis or {}).get("_routing") if isinstance(analysis, dict) else None
+        if strategy == "auto" and isinstance(routed, dict):
+            strategy = str(routed.get("summary_strategy") or "auto")
 
-        # Create chain using LCEL (LangChain Expression Language) - official pattern
-        chain = prompt | llm | StrOutputParser()
+        client = get_llm_client()  # unified LLM client (provider decided by env/config)
+        synthesizer_model = get_model_for_role("news_trend_agent", ModelRole.SYNTHESIZER)
+        planner_model = get_model_for_role("news_trend_agent", ModelRole.PLANNER)
+        writer_model = get_model_for_role("news_trend_agent", ModelRole.WRITER)
 
-        # Invoke chain
-        summary = chain.invoke({
-            "query": query,
-            "positive": sentiment.get("positive", 0),
-            "neutral": sentiment.get("neutral", 0),
-            "negative": sentiment.get("negative", 0),
-            "positive_pct": sentiment.get("positive_pct", 0),
-            "neutral_pct": sentiment.get("neutral_pct", 0),
-            "negative_pct": sentiment.get("negative_pct", 0),
-            "keywords": keywords_str,
-            "headlines": headlines_str
-        })
+        # Prepare snippets (used in both paths)
+        raw_snippets = []
+        for it in normalized_items[: min(15, len(normalized_items))]:
+            raw_snippets.append(
+                {
+                    "title": it.get("title", ""),
+                    "url": it.get("url", ""),
+                    "description": it.get("description", ""),
+                    "publishedAt": it.get("publishedAt", ""),
+                    "source": (it.get("source") or {}).get("name", ""),
+                }
+            )
 
-        logger.info(f"Trend summarization completed: summary_length={len(summary)}")
-        return summary
+        # Cheap path (SLM-style): synthesizer only
+        if str(strategy).lower() == "cheap":
+            synth_prompt = (
+                "Create a compact Korean trend brief based ONLY on the provided snippets.\n"
+                "Requirements:\n"
+                "- Title + 6~10 bullets\n"
+                "- Each bullet must include one URL in parentheses\n"
+                "- No speculation; if uncertain, say '불확실'\n\n"
+                f"Query: {query}\n\n"
+                f"Snippets (JSON): {json.dumps(raw_snippets, ensure_ascii=False)}\n"
+            )
+            brief = client.chat(
+                messages=[
+                    {"role": "system", "content": "You are a cheap gateway summarizer. Be concise and grounded."},
+                    {"role": "user", "content": synth_prompt},
+                ],
+                temperature=0.3,
+                max_tokens=900,
+                model=synthesizer_model,
+            )
+            return str(brief).strip()
+
+        # Compound (2025): planner(JSON) -> synthesizer(cheap) -> writer(refine)
+        plan_prompt = (
+            "You are a planner for a trend-analysis agent. "
+            "Return ONLY JSON that matches the schema.\n\n"
+            f"Query: {query}\n"
+            f"Language: ko\n"
+            f"Signals:\n"
+            f"- Sentiment: {sentiment}\n"
+            f"- Top keywords: {[kw.get('keyword') for kw in keywords[:10]]}\n"
+            f"- Headlines (top): {top_headlines}\n"
+        )
+
+        plan_dict = client.chat_json(
+            messages=[
+                {"role": "system", "content": "You are a strict planning engine. Output JSON only."},
+                {"role": "user", "content": plan_prompt},
+            ],
+            schema=AgentPlan.model_json_schema(),
+            temperature=0.2,
+            model=planner_model,
+            max_tokens=700,
+        )
+        plan = AgentPlan.model_validate(plan_dict)
+
+        synth_prompt = (
+            "Summarize the following news snippets into a compact Korean brief.\n"
+            "Requirements:\n"
+            "- 6~10 bullets max\n"
+            "- Each bullet must reference at least one title and include URL in parentheses\n"
+            "- No speculation; if uncertain, say '불확실'\n\n"
+            f"Query: {query}\n\n"
+            f"Snippets (JSON): {json.dumps(raw_snippets, ensure_ascii=False)}\n"
+        )
+
+        synthesized_context = client.chat(
+            messages=[
+                {"role": "system", "content": "You are a context synthesizer. Be concise and factual."},
+                {"role": "user", "content": synth_prompt},
+            ],
+            temperature=0.3,
+            max_tokens=900,
+            model=synthesizer_model,
+        )
+
+        engine = RefineEngine(client)
+        compound_prompt = (
+            prompt
+            + "\n\n---\n"
+            + "## Planner Output (JSON)\n"
+            + plan.model_dump_json(indent=2)
+            + "\n\n---\n"
+            + "## Synthesized Context (grounded)\n"
+            + str(synthesized_context)
+        )
+
+        insight: TrendInsight = engine.refine_loop(
+            prompt=compound_prompt,
+            initial_schema=TrendInsight,
+            criteria="명확하고 구체적인 인사이트 제공, 실행 가능한 권고안 포함, 중복 없는 핵심 요약",
+            max_iterations=1,  # 속도를 위해 1회 리파인만 시도
+            model=writer_model,
+        )
+
+        markdown = f"""
+### 트렌드 요약
+{insight.summary}
+
+### 주요 발견사항
+{chr(10).join([f"- {item}" for item in insight.key_findings])}
+
+### 실행 권고안
+{chr(10).join([f"- {item}" for item in insight.recommendations])}
+
+### 키워드
+{", ".join(insight.keywords)}
+
+---
+*영향력 점수: {insight.impact_score}/10*
+"""
+        logger.info(f"Trend summarization completed with impact score: {insight.impact_score}")
+        return markdown.strip()
 
     except Exception as e:
         logger.error(f"Error in LLM summarization, falling back to simple summary: {str(e)}")
 
-        # Fallback to simple summary
+        # Fallback logic (Keep existing fallback)
         summary_lines = []
-
         if sentiment.get("positive_pct", 0) > 50:
             summary_lines.append(f"'{query}'에 대한 전반적인 반응은 **긍정적**입니다.")
         elif sentiment.get("negative_pct", 0) > 50:
@@ -594,56 +707,36 @@ def retrieve_relevant_items(
     query: str,
     items: List[Dict[str, Any]],
     top_k: int = 10,
+    use_graph: bool = True,
 ) -> List[Dict[str, Any]]:
     """
     설정 기반 RAG + 키워드 폴백.
 
-    - config.default.yaml 의 agents.news_trend_agent.vector_store.type 이 `pinecone` 이고
-      PINECONE_API_KEY 가 설정되어 있으면 Pinecone + 임베딩 기반 검색을 사용
-    - 그렇지 않으면 기존 키워드 오버랩 스코어링으로 폴백
+    RAGSystem 공통 모듈을 사용하여 Pinecone 등 벡터 스토어와 연동합니다.
+    설정에 없거나 실패 시 키워드 매칭으로 폴백합니다.
     """
-    cfg = get_config_manager()
-    agent_cfg = cfg.get_agent_config("news_trend_agent")
+    # 1. Initialize RAG system for this agent
+    rag = RAGSystem("news_trend_agent")
 
-    vs_cfg: Dict[str, Any] = agent_cfg.vector_store if agent_cfg and agent_cfg.vector_store else {}
-    use_pinecone = vs_cfg.get("type") == "pinecone"
-
-    if not use_pinecone:
+    # 2. Check if RAG is enabled in config
+    if not rag.is_enabled():
         return _retrieve_relevant_items_keyword(query, items, top_k)
 
     try:
-        index_name = vs_cfg.get("index_name", "news-trend-index")
-        vector_store = PineconeVectorStore(index_name=index_name)
-
-        llm_client = get_llm_client(agent_name="news_trend_agent")
-
-        # Build corpus
-        ids: List[str] = []
-        texts: List[str] = []
-        metadatas: List[Dict[str, Any]] = []
-
-        for idx, it in enumerate(items):
-            ids.append(str(idx))
+        # 3. Index documents (if not already indexed - naive approach indexes every time)
+        # Optimization: In production, check if exists using content hash IDs or similar
+        documents = []
+        for it in items:
             text = f"{it.get('title','')} {it.get('description','')} {it.get('content','')}"
-            texts.append(text)
-            metadatas.append(it)
+            documents.append(text)
 
-        if not texts:
+        if not documents:
             return []
 
-        # Upsert into vector store
-        vectors = llm_client.get_embeddings_batch(texts)
-        vector_store.upsert(ids, vectors, metadatas)
+        rag.index_documents(documents, items)
 
-        # Query
-        query_vector = llm_client.get_embedding(query)
-        matches = vector_store.query(query_vector, top_k=top_k)
-
-        results: List[Dict[str, Any]] = []
-        for m in matches:
-            meta = m.get("metadata") or {}
-            if isinstance(meta, dict):
-                results.append(meta)
+        # 4. Retrieve (GraphRAG simulation optional)
+        results = rag.retrieve(query, top_k, use_graph=use_graph)
 
         if not results:
             return _retrieve_relevant_items_keyword(query, items, top_k)
@@ -651,7 +744,7 @@ def retrieve_relevant_items(
         return results
 
     except Exception as e:
-        logger.warning(f"Pinecone RAG retrieve failed, falling back to keyword scoring: {e}")
+        logger.warning(f"RAG retrieve failed, falling back to keyword scoring: {e}")
         return _retrieve_relevant_items_keyword(query, items, top_k)
 
 

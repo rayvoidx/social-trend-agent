@@ -230,9 +230,13 @@ def get_agent_status() -> Dict[str, Any]:
         
         load_dotenv()
         
-        # Check LLM configuration
-        llm_provider = os.getenv("LLM_PROVIDER", "not_set")
-        llm_configured = bool(os.getenv("OPENAI_API_KEY") or os.getenv("ANTHROPIC_API_KEY") or os.getenv("GOOGLE_API_KEY"))
+        # Check LLM configuration (multi-LLM)
+        llm_configured = bool(
+            os.getenv("OPENAI_API_KEY")
+            or os.getenv("ANTHROPIC_API_KEY")
+            or os.getenv("GOOGLE_API_KEY")
+            or os.getenv("OLLAMA_BASE_URL")
+        )
         
         # Check data source configuration
         news_api_configured = bool(os.getenv("NEWS_API_KEY") or os.getenv("NAVER_CLIENT_ID"))
@@ -245,7 +249,7 @@ def get_agent_status() -> Dict[str, Any]:
         return {
             "success": True,
             "system": {
-                "llm_provider": llm_provider,
+                "llm_provider": "multi",
                 "llm_configured": llm_configured,
                 "news_api_configured": news_api_configured,
                 "video_api_configured": video_api_configured,
