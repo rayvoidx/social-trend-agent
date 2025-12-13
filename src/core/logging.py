@@ -1,6 +1,7 @@
 """
 에이전트를 위한 구조화된 JSON 로깅
 """
+
 import json
 import logging
 import sys
@@ -42,21 +43,40 @@ class JsonLineFormatter(logging.Formatter):
 
         # 커스텀 필드 추가
         for key, value in record.__dict__.items():
-            if key not in ["name", "msg", "args", "created", "filename", "funcName",
-                          "levelname", "levelno", "lineno", "module", "msecs",
-                          "message", "pathname", "process", "processName",
-                          "relativeCreated", "thread", "threadName", "exc_info",
-                          "exc_text", "stack_info", "run_id", "agent", "node",
-                          "duration_ms"]:
+            if key not in [
+                "name",
+                "msg",
+                "args",
+                "created",
+                "filename",
+                "funcName",
+                "levelname",
+                "levelno",
+                "lineno",
+                "module",
+                "msecs",
+                "message",
+                "pathname",
+                "process",
+                "processName",
+                "relativeCreated",
+                "thread",
+                "threadName",
+                "exc_info",
+                "exc_text",
+                "stack_info",
+                "run_id",
+                "agent",
+                "node",
+                "duration_ms",
+            ]:
                 log_data[key] = value
 
         return json.dumps(log_data, ensure_ascii=False)
 
 
 def setup_logging(
-    level: int = logging.INFO,
-    log_file: Optional[str] = None,
-    json_format: bool = True
+    level: int = logging.INFO, log_file: Optional[str] = None, json_format: bool = True
 ) -> logging.Logger:
     """
     구조화된 로깅 설정
@@ -83,9 +103,7 @@ def setup_logging(
         console_handler.setFormatter(JsonLineFormatter())
     else:
         console_handler.setFormatter(
-            logging.Formatter(
-                "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-            )
+            logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
         )
 
     logger.addHandler(console_handler)
@@ -102,9 +120,7 @@ def setup_logging(
             file_handler.setFormatter(JsonLineFormatter())
         else:
             file_handler.setFormatter(
-                logging.Formatter(
-                    "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-                )
+                logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
             )
 
         logger.addHandler(file_handler)
@@ -159,7 +175,7 @@ class AgentLogger:
             node=node_name,
             event="node_start",
             input_size=input_size,
-            **kwargs
+            **kwargs,
         )
 
     def node_end(self, node_name: str, output_size: int = 0, duration_ms: int = 0, **kwargs):
@@ -170,7 +186,7 @@ class AgentLogger:
             event="node_end",
             output_size=output_size,
             duration_ms=duration_ms,
-            **kwargs
+            **kwargs,
         )
 
     def node_error(self, node_name: str, error: Exception):
@@ -180,7 +196,7 @@ class AgentLogger:
             node=node_name,
             event="node_error",
             error_type=type(error).__name__,
-            error_message=str(error)
+            error_message=str(error),
         )
 
 
@@ -227,13 +243,12 @@ if __name__ == "__main__":
         agent_logger.node_error("analyze", e)
 
     # JSON 라인 직접 로깅
-    log_json_line({
-        "run_id": "test-run-123",
-        "agent": "news_trend_agent",
-        "event": "complete",
-        "total_duration_ms": 5000,
-        "metrics": {
-            "coverage": 0.9,
-            "factuality": 1.0
+    log_json_line(
+        {
+            "run_id": "test-run-123",
+            "agent": "news_trend_agent",
+            "event": "complete",
+            "total_duration_ms": 5000,
+            "metrics": {"coverage": 0.9, "factuality": 1.0},
         }
-    })
+    )

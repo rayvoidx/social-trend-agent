@@ -1,6 +1,7 @@
 """
 Social Trend Agent Tools
 """
+
 from __future__ import annotations
 
 import time
@@ -21,6 +22,7 @@ from src.domain.schemas import TrendInsight
 from src.core.routing import ModelRole, get_model_for_role
 
 logger = logging.getLogger(__name__)
+
 
 @dataclass
 class CollectedItem:
@@ -58,11 +60,13 @@ def fetch_x_posts(query: str, max_results: int = 20) -> List[CollectedItem]:
     X(구 Twitter)에서 최신 포스트를 가져옵니다.
     """
     # MCP 서버를 통해서만 X 데이터를 가져옵니다.
-    raw = fetch_x_posts_via_mcp(query=query, max_results=max_results * 2) # 중복 제거 고려하여 넉넉히 요청
-    
+    raw = fetch_x_posts_via_mcp(
+        query=query, max_results=max_results * 2
+    )  # 중복 제거 고려하여 넉넉히 요청
+
     # 중복 제거 (URL, ID 기준)
     unique_raw = deduplicate_items(raw, unique_keys=["url", "id", "tweet_id"])
-    
+
     items: List[CollectedItem] = []
     for t in unique_raw[:max_results]:
         items.append(
@@ -74,7 +78,7 @@ def fetch_x_posts(query: str, max_results: int = 20) -> List[CollectedItem]:
                 published_at=parse_timestamp(t.get("created_at")),
             )
         )
-    
+
     # MCP 결과가 비어 있는 경우 처리
     if not items:
         # 설정에 따라 샘플 데이터 허용 여부 결정
@@ -84,14 +88,14 @@ def fetch_x_posts(query: str, max_results: int = 20) -> List[CollectedItem]:
         else:
             logger.info("No X posts found and sample fallback disabled.")
             return []
-            
+
     return items
 
 
 def fetch_instagram_posts(query: str, max_results: int = 20) -> List[CollectedItem]:
     """
     Instagram에서 포스트를 가져옵니다.
-    
+
     현재 실제 API 구현이 없으므로, 설정에 따라 샘플 데이터를 반환하거나 빈 리스트를 반환합니다.
     """
     if get_config_manager().should_allow_sample_fallback():
@@ -113,9 +117,9 @@ def fetch_naver_blog_posts(query: str, max_results: int = 20) -> List[CollectedI
         language="ko",
         max_results=max_results * 2,
     )
-    
+
     unique_results = deduplicate_items(results, unique_keys=["url", "link"])
-    
+
     items: List[CollectedItem] = []
     for r in unique_results[:max_results]:
         items.append(
@@ -127,7 +131,7 @@ def fetch_naver_blog_posts(query: str, max_results: int = 20) -> List[CollectedI
                 published_at=parse_timestamp(r.get("published_at") or r.get("pubDate")),
             )
         )
-    
+
     if not items:
         if get_config_manager().should_allow_sample_fallback():
             logger.warning(f"Using sample Naver Blog data for query: {query}")
@@ -135,7 +139,7 @@ def fetch_naver_blog_posts(query: str, max_results: int = 20) -> List[CollectedI
         else:
             logger.info("No Naver Blog posts found and sample fallback disabled.")
             return []
-            
+
     return items
 
 
@@ -151,14 +155,14 @@ def fetch_rss_feeds(feed_urls: List[str], max_results: int = 20) -> List[Collect
         try:
             parsed = feedparser.parse(url)
             entries = parsed.get("entries", [])
-            
-            # RSS 항목도 중복 제거 필요하지만 feedparser 객체 구조상 복잡하므로 
+
+            # RSS 항목도 중복 제거 필요하지만 feedparser 객체 구조상 복잡하므로
             # 여기서는 간단히 처리하고 나중에 전체 병합 시 다시 체크
-            
+
             for e in entries:
                 if len(collected) >= max_results:
                     break
-                    
+
                 collected.append(
                     CollectedItem(
                         source="rss",
@@ -172,7 +176,7 @@ def fetch_rss_feeds(feed_urls: List[str], max_results: int = 20) -> List[Collect
             continue
         if len(collected) >= max_results:
             break
-            
+
     return collected
 
 
@@ -186,7 +190,7 @@ def normalize_items(items: List[Any]) -> List[Dict[str, Any]]:
         if isinstance(it, dict):
             normalized.append(it)
             continue
-            
+
         # Handle CollectedItem object
         normalized.append(
             {
@@ -209,18 +213,18 @@ def analyze_sentiment_and_keywords(texts: List[str], use_llm: bool = True) -> Di
             return _analyze_sentiment_llm(texts)
         except Exception as e:
             logger.warning(f"LLM sentiment analysis failed: {e}. Falling back to keyword based.")
-    
+
     return _analyze_sentiment_keyword(texts)
 
 
 def _analyze_sentiment_llm(texts: List[str]) -> Dict[str, Any]:
     """LLM 기반 감성 및 키워드 분석 (ModelRole.SENTIMENT 사용)"""
     client = get_llm_client()
-    
+
     # 텍스트가 너무 많으면 샘플링
     sample_texts = texts[:30] if len(texts) > 30 else texts
     combined_text = "\n".join([f"- {t[:200]}" for t in sample_texts])
-    
+
     prompt = f"""
     Analyze the sentiment and extract key topics from the following social media posts.
     
@@ -245,16 +249,16 @@ def _analyze_sentiment_llm(texts: List[str]) -> Dict[str, Any]:
         }}
     }}
     """
-    
+
     result = client.chat_json(
         messages=[
             {"role": "system", "content": "You are a social media sentiment analyst."},
-            {"role": "user", "content": prompt}
+            {"role": "user", "content": prompt},
         ],
         temperature=0.2,
         model=get_model_for_role("social_trend_agent", ModelRole.SENTIMENT),  # Model Routing
     )
-    
+
     return result
 
 
@@ -312,35 +316,35 @@ def generate_trend_report(
     LLM을 사용하여 심층 트렌드 리포트를 생성합니다. (ModelRole.WRITER + RefineEngine)
     """
     logger.info(f"Generating trend report for: {query}")
-    
+
     client = get_llm_client()
     engine = RefineEngine(client)
     writer_model = get_model_for_role("social_trend_agent", ModelRole.WRITER)
     synthesizer_model = get_model_for_role("social_trend_agent", ModelRole.SYNTHESIZER)
-    
+
     sentiment = analysis.get("sentiment", {})
     keywords_data = analysis.get("keywords", {})
     top_keywords = keywords_data.get("top_keywords", [])
-    
-    keywords_str = ", ".join([kw['keyword'] for kw in top_keywords[:10]])
-    
+
+    keywords_str = ", ".join([kw["keyword"] for kw in top_keywords[:10]])
+
     # 헤드라인 추출 (Social post title or content snippet)
     headlines = []
     for item in normalized[:5]:
         content = item.get("title") or item.get("content") or ""
         headlines.append(f"- [{item.get('source')}] {content[:100]}...")
     headlines_str = "\n".join(headlines)
-    
+
     prompt = REPORT_GENERATION_PROMPT_TEMPLATE.format(
         system_persona=DEFAULT_SYSTEM_PERSONA,
         query=query,
-        positive_pct=sentiment.get('positive_pct', 0),
-        negative_pct=sentiment.get('negative_pct', 0),
-        neutral_pct=sentiment.get('neutral_pct', 0),
+        positive_pct=sentiment.get("positive_pct", 0),
+        negative_pct=sentiment.get("negative_pct", 0),
+        neutral_pct=sentiment.get("neutral_pct", 0),
         keywords_str=keywords_str,
-        headlines_str=headlines_str
+        headlines_str=headlines_str,
     )
-    
+
     try:
         routed = (analysis or {}).get("_routing") if isinstance(analysis, dict) else None
         if strategy == "auto" and isinstance(routed, dict):
@@ -363,7 +367,10 @@ def generate_trend_report(
             )
             return client.chat(
                 messages=[
-                    {"role": "system", "content": "You are a cheap gateway summarizer. Be concise and grounded."},
+                    {
+                        "role": "system",
+                        "content": "You are a cheap gateway summarizer. Be concise and grounded.",
+                    },
                     {"role": "user", "content": cheap_prompt},
                 ],
                 temperature=0.3,
@@ -378,7 +385,7 @@ def generate_trend_report(
             max_iterations=1,
             model=writer_model,  # Model Routing
         )
-        
+
         return f"""
 ### 소셜 트렌드 요약
 {insight.summary}
@@ -411,31 +418,31 @@ def retrieve_relevant_posts(
     """
     # 1. RAG 시스템 초기화
     rag = RAGSystem("social_trend_agent")
-    
+
     # 2. RAG 비활성화 시 키워드 폴백
     if not rag.is_enabled():
         return _retrieve_relevant_items_keyword(query, items, top_k)
-        
+
     try:
         # 3. 문서 인덱싱 (간단 구현: 매번 새로 인덱싱)
         documents = []
         for it in items:
             text = f"{it.get('title','')} {it.get('content','')} {it.get('source','')}"
             documents.append(text)
-            
+
         if not documents:
             return []
-            
+
         rag.index_documents(documents, items)
-        
+
         # 4. 검색
         results = rag.retrieve(query, top_k, use_graph=use_graph)
-        
+
         if not results:
             return _retrieve_relevant_items_keyword(query, items, top_k)
-            
+
         return results
-        
+
     except Exception as e:
         logger.warning(f"RAG retrieval failed: {e}")
         return _retrieve_relevant_items_keyword(query, items, top_k)
@@ -448,15 +455,15 @@ def _retrieve_relevant_items_keyword(
 ) -> List[Dict[str, Any]]:
     """키워드 기반 단순 검색 (폴백)"""
     tokens = [t for t in re.split(r"[^0-9A-Za-z가-힣]+", (query or "").lower()) if len(t) > 1]
-    
+
     scored: List[Tuple[int, Dict[str, Any]]] = []
     for it in items:
         text = f"{it.get('title','')} {it.get('content','')}".lower()
         score = sum(1 for tok in tokens if tok in text)
         scored.append((score, it))
-        
+
     scored.sort(key=lambda x: x[0], reverse=True)
-    return [it for _, it in scored[:max(1, top_k)]]
+    return [it for _, it in scored[: max(1, top_k)]]
 
 
 def _sample_items(source: str, query: str, max_results: int) -> List[CollectedItem]:

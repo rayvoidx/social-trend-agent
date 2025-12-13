@@ -15,6 +15,7 @@
 사용법:
     uvicorn agents.api.dashboard:app --reload --port 8000
 """
+
 from fastapi import FastAPI, WebSocket, HTTPException, BackgroundTasks, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
@@ -24,11 +25,7 @@ import asyncio
 from datetime import datetime
 import logging
 
-from src.infrastructure.distributed import (
-    DistributedAgentExecutor,
-    TaskPriority,
-    TaskStatus
-)
+from src.infrastructure.distributed import DistributedAgentExecutor, TaskPriority, TaskStatus
 from src.infrastructure.monitoring import (
     MetricsAggregator,
     get_metrics as prometheus_generate_latest,
@@ -46,7 +43,7 @@ logger = logging.getLogger(__name__)
 app = FastAPI(
     title="Agent Dashboard API",
     description="Real-time monitoring and control for consumer trend agents",
-    version="4.0.0"
+    version="4.0.0",
 )
 
 # Add CORS middleware
@@ -70,8 +67,10 @@ executor: Optional[DistributedAgentExecutor] = None
 # 요청/응답 모델
 # ============================================================================
 
+
 class TaskSubmitRequest(BaseModel):
     """태스크 제출 요청 모델"""
+
     agent_name: str = Field(
         default="auto",
         description="에이전트 이름 (news_trend_agent|viral_video_agent|social_trend_agent|auto)",
@@ -83,6 +82,7 @@ class TaskSubmitRequest(BaseModel):
 
 class TaskResponse(BaseModel):
     """태스크 응답 모델"""
+
     task_id: str
     agent_name: str
     query: str
@@ -97,6 +97,7 @@ class TaskResponse(BaseModel):
 
 class MetricsResponse(BaseModel):
     """메트릭 응답 모델"""
+
     timestamp: float
     executor_stats: Dict[str, Any]
     recent_tasks: List[Dict[str, Any]]
@@ -125,14 +126,13 @@ class MissionRecommendRequest(BaseModel):
     target_audience: Optional[str] = Field(
         default=None, description="선택적 타겟 오디언스(있으면 미션에 반영)"
     )
-    budget: Optional[float] = Field(
-        default=None, description="선택적 예산(있으면 미션에 반영)"
-    )
+    budget: Optional[float] = Field(default=None, description="선택적 예산(있으면 미션에 반영)")
 
 
 # ============================================================================
 # 시작/종료 이벤트
 # ============================================================================
+
 
 @app.on_event("startup")
 async def startup_event():
@@ -148,19 +148,24 @@ async def startup_event():
         params = dict(params or {})
         params.setdefault("require_approval", False)
 
-        async def _run_single(agent: str, q: str, p: Dict[str, Any]) -> Tuple[InsightSource, Dict[str, Any]]:
+        async def _run_single(
+            agent: str, q: str, p: Dict[str, Any]
+        ) -> Tuple[InsightSource, Dict[str, Any]]:
             if agent == "news_trend_agent":
                 from src.agents.news_trend.graph import run_agent as run_news_agent
+
                 source = InsightSource.NEWS_TREND
                 state = run_news_agent(query=q, **p)
                 return source, state.model_dump()
             if agent == "viral_video_agent":
                 from src.agents.viral_video.graph import run_agent as run_viral_agent
+
                 source = InsightSource.VIRAL_VIDEO
                 state = run_viral_agent(query=q, **p)
                 return source, state.model_dump()
             if agent == "social_trend_agent":
                 from src.agents.social_trend.graph import run_agent as run_social_agent
+
                 source = InsightSource.SOCIAL_TREND
                 state = run_social_agent(query=q, **p)
                 return source, state.model_dump()
@@ -169,6 +174,7 @@ async def startup_event():
         # 2025: Orchestrator 3-gear mode (router -> planner -> workers)
         if agent_name == "auto":
             from src.agents.orchestrator import orchestrate_request
+
             orch = orchestrate_request(
                 query=query,
                 agent_hint=params.get("agent_hint"),
@@ -185,7 +191,9 @@ async def startup_event():
             params.setdefault("orchestrator", orch)
 
             sub_results = []
-            primary_agent = str(plan.get("primary_agent") or agents[0].get("agent_name") or "news_trend_agent")
+            primary_agent = str(
+                plan.get("primary_agent") or agents[0].get("agent_name") or "news_trend_agent"
+            )
             primary_source: Optional[InsightSource] = None
             primary_result: Optional[Dict[str, Any]] = None
 
@@ -226,6 +234,7 @@ async def startup_event():
                 try:
                     from src.integrations.llm.llm_client import get_llm_client
                     from src.core.routing import ModelRole, get_model_for_role
+
                     client = get_llm_client()
                     writer_model = get_model_for_role("orchestrator", ModelRole.WRITER)
                     snippets = []
@@ -242,12 +251,14 @@ async def startup_event():
                         "- Keep it concise but actionable\n"
                         "- Avoid duplicates\n"
                         "- If conflicting, say '불확실'\n\n"
-                        f"User query: {query}\n\n"
-                        + "\n\n".join(snippets)
+                        f"User query: {query}\n\n" + "\n\n".join(snippets)
                     )
                     merged_report = client.chat(
                         messages=[
-                            {"role": "system", "content": "You are a report merger for a compound AI system."},
+                            {
+                                "role": "system",
+                                "content": "You are a report merger for a compound AI system.",
+                            },
                             {"role": "user", "content": merge_prompt},
                         ],
                         temperature=0.3,
@@ -276,7 +287,7 @@ async def startup_event():
             "report_md": result.get("report_md"),
             "analysis": result.get("analysis"),
             "metrics": result.get("metrics"),
-            "run_id": result.get("run_id")
+            "run_id": result.get("run_id"),
         }
 
         # 인사이트로 저장
@@ -289,10 +300,7 @@ async def startup_event():
         return result_dict
 
     # 실행기 생성
-    executor = DistributedAgentExecutor(
-        num_workers=4,
-        agent_executor=execute_agent
-    )
+    executor = DistributedAgentExecutor(num_workers=4, agent_executor=execute_agent)
 
     # 워커 시작
     await executor.start()
@@ -315,13 +323,14 @@ async def shutdown_event():
 # API 엔드포인트
 # ============================================================================
 
+
 @app.get("/api/health")
 async def health_check():
     """헬스 체크 엔드포인트"""
     return {
         "status": "healthy",
         "timestamp": datetime.now().isoformat(),
-        "executor_running": executor is not None
+        "executor_running": executor is not None,
     }
 
 
@@ -435,22 +444,19 @@ async def get_metrics():
     performance_summary = {
         "total_completed": len(completed_tasks),
         "average_duration": avg_duration,
-        "success_rate": len(completed_tasks) / len(all_tasks) if all_tasks else 0
+        "success_rate": len(completed_tasks) / len(all_tasks) if all_tasks else 0,
     }
 
     return MetricsResponse(
         timestamp=datetime.now().timestamp(),
         executor_stats=stats,
         recent_tasks=[t.to_dict() for t in recent_tasks],
-        performance_summary=performance_summary
+        performance_summary=performance_summary,
     )
 
 
 @app.get("/api/tasks")
-async def list_tasks(
-    status: Optional[str] = None,
-    limit: int = 50
-):
+async def list_tasks(status: Optional[str] = None, limit: int = 50):
     """
     태스크 목록 조회
 
@@ -476,10 +482,7 @@ async def list_tasks(
     # Sort by created_at (newest first) and limit
     tasks = sorted(tasks, key=lambda t: t.created_at, reverse=True)[:limit]
 
-    return {
-        "total": len(tasks),
-        "tasks": [t.to_dict() for t in tasks]
-    }
+    return {"total": len(tasks), "tasks": [t.to_dict() for t in tasks]}
 
 
 @app.get("/api/tasks/{task_id}", response_model=TaskResponse)
@@ -512,7 +515,7 @@ async def get_task(task_id: str):
         completed_at=task.completed_at,
         duration=duration,
         result=task.result,
-        error=task.error
+        error=task.error,
     )
 
 
@@ -533,16 +536,13 @@ async def submit_task(request: TaskSubmitRequest, background_tasks: BackgroundTa
 
     # Submit task
     task_id = await executor.submit_task(
-        agent_name=request.agent_name,
-        query=request.query,
-        params=request.params,
-        priority=priority
+        agent_name=request.agent_name, query=request.query, params=request.params, priority=priority
     )
 
     return {
         "task_id": task_id,
         "status": "submitted",
-        "message": f"Task submitted successfully. Check /api/tasks/{task_id} for status."
+        "message": f"Task submitted successfully. Check /api/tasks/{task_id} for status.",
     }
 
 
@@ -557,11 +557,7 @@ async def submit_batch(tasks: List[TaskSubmitRequest]):
         raise HTTPException(status_code=503, detail="Executor not initialized")
 
     task_defs = [
-        {
-            "agent_name": task.agent_name,
-            "query": task.query,
-            "params": task.params
-        }
+        {"agent_name": task.agent_name, "query": task.query, "params": task.params}
         for task in tasks
     ]
 
@@ -570,7 +566,7 @@ async def submit_batch(tasks: List[TaskSubmitRequest]):
     return {
         "task_ids": task_ids,
         "count": len(task_ids),
-        "message": f"Submitted {len(task_ids)} tasks"
+        "message": f"Submitted {len(task_ids)} tasks",
     }
 
 
@@ -605,7 +601,7 @@ async def get_statistics():
             "total": len(tasks),
             "completed": len(completed),
             "failed": len(failed),
-            "success_rate": len(completed) / len(tasks) if tasks else 0
+            "success_rate": len(completed) / len(tasks) if tasks else 0,
         }
 
     # Performance metrics from file system
@@ -623,7 +619,7 @@ async def get_statistics():
         "timestamp": datetime.now().isoformat(),
         "executor": executor_stats,
         "agents": agent_stats,
-        "performance": perf_stats
+        "performance": perf_stats,
     }
 
 
@@ -698,6 +694,7 @@ async def dashboard_summary(limit: int = 10):
 # 실시간 업데이트를 위한 WebSocket 엔드포인트
 # ============================================================================
 
+
 @app.websocket("/ws/metrics")
 async def websocket_metrics(websocket: WebSocket):
     """
@@ -725,11 +722,13 @@ async def websocket_metrics(websocket: WebSocket):
                 recent_tasks = sorted(all_tasks, key=lambda t: t.created_at, reverse=True)[:5]
 
                 # Send metrics
-                await websocket.send_json({
-                    "timestamp": datetime.now().timestamp(),
-                    "stats": stats,
-                    "recent_tasks": [t.to_dict() for t in recent_tasks]
-                })
+                await websocket.send_json(
+                    {
+                        "timestamp": datetime.now().timestamp(),
+                        "stats": stats,
+                        "recent_tasks": [t.to_dict() for t in recent_tasks],
+                    }
+                )
 
             # Wait before next update
             await asyncio.sleep(2)
@@ -746,6 +745,7 @@ async def websocket_metrics(websocket: WebSocket):
 # ============================================================================
 # 추가 유틸리티 엔드포인트
 # ============================================================================
+
 
 @app.delete("/api/tasks/{task_id}")
 async def cancel_task(task_id: str):
@@ -764,8 +764,7 @@ async def cancel_task(task_id: str):
 
     if task.status != TaskStatus.PENDING:
         raise HTTPException(
-            status_code=400,
-            detail=f"Cannot cancel task in status: {task.status.value}"
+            status_code=400, detail=f"Cannot cancel task in status: {task.status.value}"
         )
 
     await executor.task_queue.update_task(task_id, status=TaskStatus.CANCELLED)
@@ -785,25 +784,20 @@ async def get_workers():
 
     workers_info = []
     for worker in executor.workers:
-        workers_info.append({
-            "worker_id": worker.worker_id,
-            "is_running": worker.is_running,
-            "current_task": worker.current_task.task_id if worker.current_task else None
-        })
+        workers_info.append(
+            {
+                "worker_id": worker.worker_id,
+                "is_running": worker.is_running,
+                "current_task": worker.current_task.task_id if worker.current_task else None,
+            }
+        )
 
-    return {
-        "total_workers": len(workers_info),
-        "workers": workers_info
-    }
+    return {"total_workers": len(workers_info), "workers": workers_info}
 
 
 if __name__ == "__main__":
     import uvicorn
 
     uvicorn.run(
-        "agents.api.dashboard:app",
-        host="0.0.0.0",
-        port=8000,
-        reload=True,
-        log_level="info"
+        "agents.api.dashboard:app", host="0.0.0.0", port=8000, reload=True, log_level="info"
     )

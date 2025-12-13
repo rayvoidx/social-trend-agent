@@ -16,6 +16,7 @@
 프로덕션 환경에서 수평 확장(horizontal scaling)을 지원하며,
 워커 풀 기반의 병렬 처리를 통해 처리량을 극대화합니다.
 """
+
 import asyncio
 import uuid
 import json
@@ -31,6 +32,7 @@ logger = logging.getLogger(__name__)
 
 class TaskStatus(str, Enum):
     """태스크 실행 상태"""
+
     PENDING = "pending"
     RUNNING = "running"
     COMPLETED = "completed"
@@ -40,6 +42,7 @@ class TaskStatus(str, Enum):
 
 class TaskPriority(int, Enum):
     """태스크 우선순위 레벨"""
+
     LOW = 0
     NORMAL = 1
     HIGH = 2
@@ -49,6 +52,7 @@ class TaskPriority(int, Enum):
 @dataclass
 class AgentTask:
     """에이전트 실행을 위한 태스크 정의"""
+
     task_id: str
     agent_name: str
     query: str
@@ -69,8 +73,8 @@ class AgentTask:
     def to_dict(self) -> Dict[str, Any]:
         """딕셔너리로 변환"""
         data = asdict(self)
-        data['priority'] = self.priority.value
-        data['status'] = self.status.value
+        data["priority"] = self.priority.value
+        data["status"] = self.status.value
         return data
 
 
@@ -149,7 +153,7 @@ class AgentWorker:
         self,
         worker_id: str,
         task_queue: InMemoryTaskQueue,
-        agent_executor: Callable[[str, str, Dict[str, Any]], Awaitable[Dict[str, Any]]]
+        agent_executor: Callable[[str, str, Dict[str, Any]], Awaitable[Dict[str, Any]]],
     ):
         """
         워커 초기화
@@ -200,24 +204,17 @@ class AgentWorker:
                 task.task_id,
                 status=TaskStatus.RUNNING,
                 started_at=time.time(),
-                worker_id=self.worker_id
+                worker_id=self.worker_id,
             )
 
             logger.info(f"Worker {self.worker_id} executing task {task.task_id}")
 
             # 에이전트 실행
-            result = await self.agent_executor(
-                task.agent_name,
-                task.query,
-                task.params
-            )
+            result = await self.agent_executor(task.agent_name, task.query, task.params)
 
             # 성공 상태 업데이트
             await self.task_queue.update_task(
-                task.task_id,
-                status=TaskStatus.COMPLETED,
-                completed_at=time.time(),
-                result=result
+                task.task_id, status=TaskStatus.COMPLETED, completed_at=time.time(), result=result
             )
 
             logger.info(f"Worker {self.worker_id} completed task {task.task_id}")
@@ -225,10 +222,7 @@ class AgentWorker:
         except Exception as e:
             # 실패 상태 업데이트
             await self.task_queue.update_task(
-                task.task_id,
-                status=TaskStatus.FAILED,
-                completed_at=time.time(),
-                error=str(e)
+                task.task_id, status=TaskStatus.FAILED, completed_at=time.time(), error=str(e)
             )
 
             logger.error(f"Worker {self.worker_id} failed task {task.task_id}: {e}")
@@ -281,7 +275,7 @@ class DistributedAgentExecutor:
         self,
         num_workers: int = 4,
         agent_executor: Optional[Callable] = None,
-        task_queue: Optional[InMemoryTaskQueue] = None
+        task_queue: Optional[InMemoryTaskQueue] = None,
     ):
         """
         분산 실행기 초기화
@@ -298,7 +292,9 @@ class DistributedAgentExecutor:
         self.workers: List[AgentWorker] = []
         self.worker_tasks: List[asyncio.Task] = []
 
-    async def _default_executor(self, agent_name: str, query: str, params: Dict[str, Any]) -> Dict[str, Any]:
+    async def _default_executor(
+        self, agent_name: str, query: str, params: Dict[str, Any]
+    ) -> Dict[str, Any]:
         """기본 에이전트 실행 함수"""
         from src.agents.news_trend.graph import run_agent
 
@@ -341,7 +337,7 @@ class DistributedAgentExecutor:
         agent_name: str,
         query: str,
         params: Optional[Dict[str, Any]] = None,
-        priority: TaskPriority = TaskPriority.NORMAL
+        priority: TaskPriority = TaskPriority.NORMAL,
     ) -> str:
         """
         실행할 태스크 제출
@@ -362,7 +358,7 @@ class DistributedAgentExecutor:
             agent_name=agent_name,
             query=query,
             params=params or {},
-            priority=priority
+            priority=priority,
         )
 
         await self.task_queue.enqueue(task)
@@ -370,9 +366,7 @@ class DistributedAgentExecutor:
         return task_id
 
     async def submit_batch(
-        self,
-        tasks: List[Dict[str, Any]],
-        priority: TaskPriority = TaskPriority.NORMAL
+        self, tasks: List[Dict[str, Any]], priority: TaskPriority = TaskPriority.NORMAL
     ) -> List[str]:
         """
         태스크 일괄 제출
@@ -391,7 +385,7 @@ class DistributedAgentExecutor:
                 agent_name=task_def["agent_name"],
                 query=task_def["query"],
                 params=task_def.get("params", {}),
-                priority=priority
+                priority=priority,
             )
             task_ids.append(task_id)
 
@@ -408,10 +402,7 @@ class DistributedAgentExecutor:
         return task.result if task and task.status == TaskStatus.COMPLETED else None
 
     async def wait_for_result(
-        self,
-        task_id: str,
-        timeout: Optional[float] = None,
-        poll_interval: float = 0.5
+        self, task_id: str, timeout: Optional[float] = None, poll_interval: float = 0.5
     ) -> Dict[str, Any]:
         """
         태스크 완료 대기 및 결과 반환
@@ -452,9 +443,7 @@ class DistributedAgentExecutor:
             await asyncio.sleep(poll_interval)
 
     async def wait_for_batch(
-        self,
-        task_ids: List[str],
-        timeout: Optional[float] = None
+        self, task_ids: List[str], timeout: Optional[float] = None
     ) -> List[Dict[str, Any]]:
         """
         배치의 모든 태스크 완료 대기
@@ -468,8 +457,7 @@ class DistributedAgentExecutor:
         """
         # 모든 태스크를 동시에 대기
         results = await asyncio.gather(
-            *[self.wait_for_result(tid, timeout) for tid in task_ids],
-            return_exceptions=True
+            *[self.wait_for_result(tid, timeout) for tid in task_ids], return_exceptions=True
         )
 
         return results
@@ -494,7 +482,7 @@ class DistributedAgentExecutor:
             "active_workers": active_workers,
             "total_tasks": len(all_tasks),
             "tasks_by_status": by_status,
-            "queue_size": self.task_queue.pending_queue.qsize()
+            "queue_size": self.task_queue.pending_queue.qsize(),
         }
 
 
@@ -510,10 +498,7 @@ async def example_usage():
         return {"query": query, "result": f"Result for {query}"}
 
     # Create distributed executor
-    executor = DistributedAgentExecutor(
-        num_workers=3,
-        agent_executor=my_agent_executor
-    )
+    executor = DistributedAgentExecutor(num_workers=3, agent_executor=my_agent_executor)
 
     # Start workers
     await executor.start()
@@ -524,16 +509,13 @@ async def example_usage():
             agent_name="news_trend_agent",
             query="AI trends",
             params={"time_window": "7d"},
-            priority=TaskPriority.HIGH
+            priority=TaskPriority.HIGH,
         )
 
         print(f"Submitted task: {task_id}")
 
         # Submit batch
-        batch_tasks = [
-            {"agent_name": "news_trend_agent", "query": f"Query {i}"}
-            for i in range(5)
-        ]
+        batch_tasks = [{"agent_name": "news_trend_agent", "query": f"Query {i}"} for i in range(5)]
         task_ids = await executor.submit_batch(batch_tasks)
 
         print(f"Submitted batch: {len(task_ids)} tasks")

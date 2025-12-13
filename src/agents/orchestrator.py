@@ -43,9 +43,35 @@ def select_agent(
 
     # Simple heuristic mapping based on query content (robust even if router is heuristic).
     q = (query or "").lower()
-    if any(k in q for k in ["유튜브", "youtube", "tiktok", "틱톡", "viral", "바이럴", "조회수", "shorts", "릴스"]):
+    if any(
+        k in q
+        for k in [
+            "유튜브",
+            "youtube",
+            "tiktok",
+            "틱톡",
+            "viral",
+            "바이럴",
+            "조회수",
+            "shorts",
+            "릴스",
+        ]
+    ):
         return "viral_video_agent", r
-    if any(k in q for k in ["트위터", "twitter", "x ", "인스타", "instagram", "블로그", "sns", "소셜", "커뮤니티"]):
+    if any(
+        k in q
+        for k in [
+            "트위터",
+            "twitter",
+            "x ",
+            "인스타",
+            "instagram",
+            "블로그",
+            "sns",
+            "소셜",
+            "커뮤니티",
+        ]
+    ):
         return "social_trend_agent", r
 
     # Default to news_trend_agent for general market/news queries.
@@ -53,7 +79,12 @@ def select_agent(
 
 
 def _planner_enabled() -> bool:
-    return os.getenv("ORCHESTRATOR_ENABLE_PLANNER", "1").strip().lower() in ("1", "true", "yes", "on")
+    return os.getenv("ORCHESTRATOR_ENABLE_PLANNER", "1").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    )
 
 
 def _multi_agent_enabled() -> bool:
@@ -153,7 +184,13 @@ def plan_workflow(
 
     fallback_plan: Dict[str, Any] = {
         "primary_agent": primary,
-        "agents": [{"agent_name": primary, "params": {"rag_mode": "graph", "rag_top_k": 10, "summary_strategy": "compound"}, "steps": fallback_steps}],
+        "agents": [
+            {
+                "agent_name": primary,
+                "params": {"rag_mode": "graph", "rag_top_k": 10, "summary_strategy": "compound"},
+                "steps": fallback_steps,
+            }
+        ],
         "combine": "single",
         "notes": "planner_fallback",
     }
@@ -187,28 +224,65 @@ def plan_workflow(
                                         "op": {"type": "string"},
                                         "inputs": {"type": "array", "items": {"type": "string"}},
                                         "outputs": {"type": "array", "items": {"type": "string"}},
-                                        "depends_on": {"type": "array", "items": {"type": "string"}},
+                                        "depends_on": {
+                                            "type": "array",
+                                            "items": {"type": "string"},
+                                        },
                                         "retry_policy": {
                                             "type": "object",
                                             "properties": {
-                                                "max_retries": {"type": "integer", "minimum": 0, "maximum": 5},
-                                                "backoff_seconds": {"type": "number", "minimum": 0, "maximum": 30},
+                                                "max_retries": {
+                                                    "type": "integer",
+                                                    "minimum": 0,
+                                                    "maximum": 5,
+                                                },
+                                                "backoff_seconds": {
+                                                    "type": "number",
+                                                    "minimum": 0,
+                                                    "maximum": 30,
+                                                },
                                                 "jitter": {"type": "boolean"},
                                             },
-                                            "required": ["max_retries", "backoff_seconds", "jitter"],
+                                            "required": [
+                                                "max_retries",
+                                                "backoff_seconds",
+                                                "jitter",
+                                            ],
                                         },
-                                        "timeout_seconds": {"type": "integer", "minimum": 1, "maximum": 600},
+                                        "timeout_seconds": {
+                                            "type": "integer",
+                                            "minimum": 1,
+                                            "maximum": 600,
+                                        },
                                         "circuit_breaker": {
                                             "type": "object",
                                             "properties": {
-                                                "failure_threshold": {"type": "integer", "minimum": 0, "maximum": 10},
-                                                "reset_seconds": {"type": "integer", "minimum": 0, "maximum": 3600},
+                                                "failure_threshold": {
+                                                    "type": "integer",
+                                                    "minimum": 0,
+                                                    "maximum": 10,
+                                                },
+                                                "reset_seconds": {
+                                                    "type": "integer",
+                                                    "minimum": 0,
+                                                    "maximum": 3600,
+                                                },
                                             },
                                             "required": ["failure_threshold", "reset_seconds"],
                                         },
                                         "params": {"type": "object"},
                                     },
-                                    "required": ["id", "op", "inputs", "outputs", "depends_on", "retry_policy", "timeout_seconds", "circuit_breaker", "params"],
+                                    "required": [
+                                        "id",
+                                        "op",
+                                        "inputs",
+                                        "outputs",
+                                        "depends_on",
+                                        "retry_policy",
+                                        "timeout_seconds",
+                                        "circuit_breaker",
+                                        "params",
+                                    ],
                                 },
                             },
                             # legacy support: allow old tool_plan too
@@ -271,7 +345,13 @@ def plan_workflow(
             pa = str(planned.get("primary_agent") or primary)
             return {
                 "primary_agent": pa if pa in SUPPORTED_AGENTS else primary,
-                "agents": [{"agent_name": pa if pa in SUPPORTED_AGENTS else primary, "params": {}, "steps": fallback_steps}],
+                "agents": [
+                    {
+                        "agent_name": pa if pa in SUPPORTED_AGENTS else primary,
+                        "params": {},
+                        "steps": fallback_steps,
+                    }
+                ],
                 "combine": "single",
                 "notes": "multi_disabled",
             }
@@ -306,64 +386,86 @@ def orchestrate_request(
             language=language,
         )
     else:
-        primary, _ = select_agent(query=query, hint=agent_hint, time_window=time_window, language=language)
+        primary, _ = select_agent(
+            query=query, hint=agent_hint, time_window=time_window, language=language
+        )
         plan = {
             "primary_agent": primary,
-            "agents": [{
-                "agent_name": primary,
-                "params": {"rag_mode": "graph", "rag_top_k": 10, "summary_strategy": "cheap"},
-                "steps": [
-                    {
-                        "id": "s1",
-                        "op": "collect",
-                        "inputs": [],
-                        "outputs": ["raw_items"],
-                        "depends_on": [],
-                        "retry_policy": {"max_retries": 1, "backoff_seconds": 0.5, "jitter": True},
-                        "params": {},
-                    },
-                    {
-                        "id": "s2",
-                        "op": "normalize",
-                        "inputs": ["raw_items"],
-                        "outputs": ["normalized"],
-                        "depends_on": ["s1"],
-                        "retry_policy": {"max_retries": 0, "backoff_seconds": 0.0, "jitter": False},
-                        "params": {},
-                    },
-                    {
-                        "id": "s3",
-                        "op": "rag",
-                        "inputs": ["normalized"],
-                        "outputs": ["normalized_filtered"],
-                        "depends_on": ["s2"],
-                        "retry_policy": {"max_retries": 0, "backoff_seconds": 0.0, "jitter": False},
-                        "params": {"rag_mode": "graph", "rag_top_k": 10},
-                    },
-                    {
-                        "id": "s4",
-                        "op": "summarize",
-                        "inputs": ["analysis", "normalized_filtered"],
-                        "outputs": ["summary"],
-                        "depends_on": ["s3"],
-                        "retry_policy": {"max_retries": 0, "backoff_seconds": 0.0, "jitter": False},
-                        "params": {"summary_strategy": "cheap"},
-                    },
-                    {
-                        "id": "s5",
-                        "op": "report",
-                        "inputs": ["summary"],
-                        "outputs": ["report_md"],
-                        "depends_on": ["s4"],
-                        "retry_policy": {"max_retries": 0, "backoff_seconds": 0.0, "jitter": False},
-                        "params": {},
-                    },
-                ],
-            }],
+            "agents": [
+                {
+                    "agent_name": primary,
+                    "params": {"rag_mode": "graph", "rag_top_k": 10, "summary_strategy": "cheap"},
+                    "steps": [
+                        {
+                            "id": "s1",
+                            "op": "collect",
+                            "inputs": [],
+                            "outputs": ["raw_items"],
+                            "depends_on": [],
+                            "retry_policy": {
+                                "max_retries": 1,
+                                "backoff_seconds": 0.5,
+                                "jitter": True,
+                            },
+                            "params": {},
+                        },
+                        {
+                            "id": "s2",
+                            "op": "normalize",
+                            "inputs": ["raw_items"],
+                            "outputs": ["normalized"],
+                            "depends_on": ["s1"],
+                            "retry_policy": {
+                                "max_retries": 0,
+                                "backoff_seconds": 0.0,
+                                "jitter": False,
+                            },
+                            "params": {},
+                        },
+                        {
+                            "id": "s3",
+                            "op": "rag",
+                            "inputs": ["normalized"],
+                            "outputs": ["normalized_filtered"],
+                            "depends_on": ["s2"],
+                            "retry_policy": {
+                                "max_retries": 0,
+                                "backoff_seconds": 0.0,
+                                "jitter": False,
+                            },
+                            "params": {"rag_mode": "graph", "rag_top_k": 10},
+                        },
+                        {
+                            "id": "s4",
+                            "op": "summarize",
+                            "inputs": ["analysis", "normalized_filtered"],
+                            "outputs": ["summary"],
+                            "depends_on": ["s3"],
+                            "retry_policy": {
+                                "max_retries": 0,
+                                "backoff_seconds": 0.0,
+                                "jitter": False,
+                            },
+                            "params": {"summary_strategy": "cheap"},
+                        },
+                        {
+                            "id": "s5",
+                            "op": "report",
+                            "inputs": ["summary"],
+                            "outputs": ["report_md"],
+                            "depends_on": ["s4"],
+                            "retry_policy": {
+                                "max_retries": 0,
+                                "backoff_seconds": 0.0,
+                                "jitter": False,
+                            },
+                            "params": {},
+                        },
+                    ],
+                }
+            ],
             "combine": "single",
             "notes": "router_only",
         }
 
     return {"routing": routing, "plan": plan}
-
-

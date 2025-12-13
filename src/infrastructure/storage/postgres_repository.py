@@ -6,6 +6,7 @@ PostgreSQL 영속 저장소
 - 트랜잭션 관리
 - 커넥션 풀링
 """
+
 from __future__ import annotations
 
 import logging
@@ -34,10 +35,7 @@ def get_postgres_engine():
         from sqlalchemy import create_engine
         from sqlalchemy.orm import sessionmaker
 
-        database_url = os.getenv(
-            "DATABASE_URL",
-            "postgresql://localhost:5432/trend_analysis"
-        )
+        database_url = os.getenv("DATABASE_URL", "postgresql://localhost:5432/trend_analysis")
 
         pool_size = int(os.getenv("POSTGRES_POOL_SIZE", "20"))
         max_overflow = int(os.getenv("POSTGRES_MAX_OVERFLOW", "10"))
@@ -50,11 +48,7 @@ def get_postgres_engine():
             echo=os.getenv("DEBUG", "false").lower() == "true",
         )
 
-        _SessionLocal = sessionmaker(
-            autocommit=False,
-            autoflush=False,
-            bind=_engine
-        )
+        _SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=_engine)
 
         logger.info(f"Connected to PostgreSQL: {database_url.split('@')[-1]}")
         return _engine
@@ -99,6 +93,7 @@ def session_scope():
 # SQLAlchemy Models
 # =============================================================================
 
+
 def create_tables():
     """Create database tables."""
     engine = get_postgres_engine()
@@ -107,8 +102,16 @@ def create_tables():
 
     try:
         from sqlalchemy import (
-            Column, String, Float, Integer, DateTime, Text, JSON,
-            MetaData, Table, Index
+            Column,
+            String,
+            Float,
+            Integer,
+            DateTime,
+            Text,
+            JSON,
+            MetaData,
+            Table,
+            Index,
         )
 
         metadata = MetaData()
@@ -213,6 +216,7 @@ def create_tables():
 # Generic Repository
 # =============================================================================
 
+
 class PostgresRepository(Generic[T]):
     """
     Generic PostgreSQL repository.
@@ -236,15 +240,18 @@ class PostgresRepository(Generic[T]):
                 with session_scope() as session:
                     if session:
                         from sqlalchemy import text
+
                         columns = ", ".join(data.keys())
                         placeholders = ", ".join([f":{k}" for k in data.keys()])
 
-                        sql = text(f"""
+                        sql = text(
+                            f"""
                             INSERT INTO {self.table_name} (id, {columns})
                             VALUES (:id, {placeholders})
                             ON CONFLICT (id) DO UPDATE SET
                             {', '.join([f'{k} = :{k}' for k in data.keys()])}
-                        """)
+                        """
+                        )
 
                         session.execute(sql, {"id": id, **data})
                         logger.debug(f"Created {self.table_name} record: {id}")
@@ -263,7 +270,7 @@ class PostgresRepository(Generic[T]):
         """
         if "id" not in data:
             raise ValueError("Data must contain 'id' field")
-        
+
         # Extract ID and pass rest as data (actually pass full data including ID to columns is fine if create handles it)
         # create method expects id separately but also data.
         # It constructs INSERT ... (id, ...) VALUES (:id, ...).
@@ -276,7 +283,7 @@ class PostgresRepository(Generic[T]):
         # columns = ", ".join(data.keys())
         # INSERT INTO table (id, {columns})
         # So 'id' should NOT be in data keys if it's already first arg.
-        
+
         id_val = data["id"]
         data_without_id = {k: v for k, v in data.items() if k != "id"}
         return self.create(id_val, data_without_id)
@@ -288,6 +295,7 @@ class PostgresRepository(Generic[T]):
                 with session_scope() as session:
                     if session:
                         from sqlalchemy import text
+
                         sql = text(f"SELECT * FROM {self.table_name} WHERE id = :id")
                         result = session.execute(sql, {"id": id}).fetchone()
                         if result:
@@ -306,13 +314,16 @@ class PostgresRepository(Generic[T]):
                 with session_scope() as session:
                     if session:
                         from sqlalchemy import text
+
                         set_clause = ", ".join([f"{k} = :{k}" for k in data.keys()])
 
-                        sql = text(f"""
+                        sql = text(
+                            f"""
                             UPDATE {self.table_name}
                             SET {set_clause}, updated_at = NOW()
                             WHERE id = :id
-                        """)
+                        """
+                        )
 
                         session.execute(sql, {"id": id, **data})
                         return self.get(id)
@@ -333,6 +344,7 @@ class PostgresRepository(Generic[T]):
                 with session_scope() as session:
                     if session:
                         from sqlalchemy import text
+
                         sql = text(f"DELETE FROM {self.table_name} WHERE id = :id")
                         session.execute(sql, {"id": id})
                         return True
@@ -352,7 +364,7 @@ class PostgresRepository(Generic[T]):
         order_by: str = "created_at",
         order_desc: bool = True,
         limit: int = 100,
-        offset: int = 0
+        offset: int = 0,
     ) -> List[Dict[str, Any]]:
         """레코드 목록 조회."""
         if self._engine:
@@ -372,12 +384,14 @@ class PostgresRepository(Generic[T]):
                             where_clause = "WHERE " + " AND ".join(conditions)
 
                         direction = "DESC" if order_desc else "ASC"
-                        sql = text(f"""
+                        sql = text(
+                            f"""
                             SELECT * FROM {self.table_name}
                             {where_clause}
                             ORDER BY {order_by} {direction}
                             LIMIT :limit OFFSET :offset
-                        """)
+                        """
+                        )
 
                         params["limit"] = limit
                         params["offset"] = offset
@@ -391,12 +405,9 @@ class PostgresRepository(Generic[T]):
         # Fallback
         items = list(self._memory_store.values())
         if filters:
-            items = [
-                item for item in items
-                if all(item.get(k) == v for k, v in filters.items())
-            ]
+            items = [item for item in items if all(item.get(k) == v for k, v in filters.items())]
         items.sort(key=lambda x: x.get(order_by, ""), reverse=order_desc)
-        return items[offset:offset + limit]
+        return items[offset : offset + limit]
 
     def count(self, filters: Optional[Dict[str, Any]] = None) -> int:
         """레코드 수 조회."""
@@ -426,10 +437,7 @@ class PostgresRepository(Generic[T]):
         # Fallback
         items = list(self._memory_store.values())
         if filters:
-            items = [
-                item for item in items
-                if all(item.get(k) == v for k, v in filters.items())
-            ]
+            items = [item for item in items if all(item.get(k) == v for k, v in filters.items())]
         return len(items)
 
     # Aliases for compatibility
@@ -440,6 +448,7 @@ class PostgresRepository(Generic[T]):
 # =============================================================================
 # Specialized Repositories
 # =============================================================================
+
 
 class InsightRepository(PostgresRepository):
     """Insight 전용 저장소."""
@@ -458,12 +467,15 @@ class InsightRepository(PostgresRepository):
                 with session_scope() as session:
                     if session:
                         from sqlalchemy import text
-                        sql = text(f"""
+
+                        sql = text(
+                            f"""
                             SELECT * FROM {self.table_name}
                             WHERE created_at > NOW() - INTERVAL '{hours} hours'
                             ORDER BY created_at DESC
                             LIMIT :limit
-                        """)
+                        """
+                        )
                         results = session.execute(sql, {"limit": limit}).fetchall()
                         return [dict(row._mapping) for row in results]
             except Exception as e:
@@ -502,26 +514,24 @@ class CreatorRepository(PostgresRepository):
         """플랫폼별 크리에이터 조회."""
         return self.list(filters={"platform": platform}, limit=limit)
 
-    def get_top_creators(
-        self,
-        limit: int = 20,
-        min_followers: int = 0
-    ) -> List[Dict[str, Any]]:
+    def get_top_creators(self, limit: int = 20, min_followers: int = 0) -> List[Dict[str, Any]]:
         """상위 크리에이터 조회."""
         if self._engine:
             try:
                 with session_scope() as session:
                     if session:
                         from sqlalchemy import text
-                        sql = text(f"""
+
+                        sql = text(
+                            f"""
                             SELECT * FROM {self.table_name}
                             WHERE followers >= :min_followers
                             ORDER BY engagement_rate DESC, followers DESC
                             LIMIT :limit
-                        """)
+                        """
+                        )
                         results = session.execute(
-                            sql,
-                            {"min_followers": min_followers, "limit": limit}
+                            sql, {"min_followers": min_followers, "limit": limit}
                         ).fetchall()
                         return [dict(row._mapping) for row in results]
             except Exception as e:
@@ -549,6 +559,7 @@ class CollectedItemRepository(PostgresRepository):
 # =============================================================================
 # Initialization
 # =============================================================================
+
 
 def init_database():
     """Initialize database (create tables if not exist)."""

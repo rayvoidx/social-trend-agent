@@ -60,13 +60,19 @@ def build_plan_runner_graph(
 
         pe = getattr(state, "plan_execution", {}) or {}
         completed = pe.get("completed_ids")
-        completed_ids: List[str] = [x for x in completed if isinstance(x, str)] if isinstance(completed, list) else []
+        completed_ids: List[str] = (
+            [x for x in completed if isinstance(x, str)] if isinstance(completed, list) else []
+        )
         open_until = pe.get("circuit_open_until")
         open_until_map: Dict[str, float] = dict(open_until) if isinstance(open_until, dict) else {}
         open_until_op = pe.get("circuit_open_until_op")
-        open_until_op_map: Dict[str, float] = dict(open_until_op) if isinstance(open_until_op, dict) else {}
+        open_until_op_map: Dict[str, float] = (
+            dict(open_until_op) if isinstance(open_until_op, dict) else {}
+        )
         skipped = pe.get("skipped_ids")
-        skipped_ids: List[str] = [x for x in skipped if isinstance(x, str)] if isinstance(skipped, list) else []
+        skipped_ids: List[str] = (
+            [x for x in skipped if isinstance(x, str)] if isinstance(skipped, list) else []
+        )
 
         next_step: Optional[Dict[str, Any]] = None
         for s in steps_list:
@@ -128,15 +134,27 @@ def build_plan_runner_graph(
             def _wrapped(state: Any) -> Dict[str, Any]:
                 pe = dict(getattr(state, "plan_execution", {}) or {})
                 completed = pe.get("completed_ids")
-                completed_ids: List[str] = [x for x in completed if isinstance(x, str)] if isinstance(completed, list) else []
+                completed_ids: List[str] = (
+                    [x for x in completed if isinstance(x, str)]
+                    if isinstance(completed, list)
+                    else []
+                )
                 fail_counts = pe.get("failure_counts")
-                failure_counts: Dict[str, int] = dict(fail_counts) if isinstance(fail_counts, dict) else {}
+                failure_counts: Dict[str, int] = (
+                    dict(fail_counts) if isinstance(fail_counts, dict) else {}
+                )
                 fail_counts_op = pe.get("failure_counts_op")
-                failure_counts_op: Dict[str, int] = dict(fail_counts_op) if isinstance(fail_counts_op, dict) else {}
+                failure_counts_op: Dict[str, int] = (
+                    dict(fail_counts_op) if isinstance(fail_counts_op, dict) else {}
+                )
                 open_until = pe.get("circuit_open_until")
-                open_until_map: Dict[str, float] = dict(open_until) if isinstance(open_until, dict) else {}
+                open_until_map: Dict[str, float] = (
+                    dict(open_until) if isinstance(open_until, dict) else {}
+                )
                 open_until_op = pe.get("circuit_open_until_op")
-                open_until_op_map: Dict[str, float] = dict(open_until_op) if isinstance(open_until_op, dict) else {}
+                open_until_op_map: Dict[str, float] = (
+                    dict(open_until_op) if isinstance(open_until_op, dict) else {}
+                )
 
                 sid = pe.get("current_step_id")
                 op_key_local = pe.get("current_op_key")
@@ -147,19 +165,29 @@ def build_plan_runner_graph(
                         failure_counts[sid] = int(failure_counts.get(sid, 0)) + 1
                         plan = getattr(state, "plan", {}) or {}
                         steps_local = plan.get("steps") if isinstance(plan, dict) else None
-                        steps_list2: List[Dict[str, Any]] = steps_local if isinstance(steps_local, list) else steps
+                        steps_list2: List[Dict[str, Any]] = (
+                            steps_local if isinstance(steps_local, list) else steps
+                        )
                         for st in steps_list2:
                             if isinstance(st, dict) and st.get("id") == sid:
                                 cb = st.get("circuit_breaker")
                                 if isinstance(cb, dict):
                                     thr = cb.get("failure_threshold", 0)
                                     reset = cb.get("reset_seconds", 0)
-                                    if isinstance(thr, int) and thr > 0 and failure_counts[sid] >= thr:
+                                    if (
+                                        isinstance(thr, int)
+                                        and thr > 0
+                                        and failure_counts[sid] >= thr
+                                    ):
                                         if isinstance(reset, int) and reset > 0:
                                             open_until_map[sid] = time.time() + float(reset)
                                             if isinstance(op_key_local, str) and op_key_local:
-                                                failure_counts_op[op_key_local] = int(failure_counts_op.get(op_key_local, 0)) + 1
-                                                open_until_op_map[op_key_local] = time.time() + float(reset)
+                                                failure_counts_op[op_key_local] = (
+                                                    int(failure_counts_op.get(op_key_local, 0)) + 1
+                                                )
+                                                open_until_op_map[op_key_local] = (
+                                                    time.time() + float(reset)
+                                                )
                                 break
                     if isinstance(sid, str) and sid not in completed_ids:
                         completed_ids.append(sid)
@@ -197,7 +225,9 @@ def build_plan_runner_graph(
     def op_unknown(state: Any) -> Dict[str, Any]:
         pe = dict(getattr(state, "plan_execution", {}) or {})
         completed = pe.get("completed_ids")
-        completed_ids: List[str] = [x for x in completed if isinstance(x, str)] if isinstance(completed, list) else []
+        completed_ids: List[str] = (
+            [x for x in completed if isinstance(x, str)] if isinstance(completed, list) else []
+        )
         sid = pe.get("current_step_id")
         if isinstance(sid, str) and sid not in completed_ids:
             completed_ids.append(sid)
@@ -220,5 +250,3 @@ def build_plan_runner_graph(
         if "report" in op_nodes:
             interrupt_before = ["op_report"]
     return graph.compile(checkpointer=checkpointer, interrupt_before=interrupt_before)
-
-

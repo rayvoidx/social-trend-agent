@@ -4,6 +4,7 @@
 다양한 소스의 날짜 형식을 통합 처리하고,
 타임 윈도우 기반 필터링을 지원합니다.
 """
+
 from __future__ import annotations
 
 import logging
@@ -18,6 +19,7 @@ logger = logging.getLogger(__name__)
 # =============================================================================
 # Date Parsing
 # =============================================================================
+
 
 def parse_datetime(date_str: Union[str, int, float, None]) -> Optional[float]:
     """
@@ -104,6 +106,7 @@ def _parse_rfc2822(date_str: str) -> Optional[float]:
     """Parse RFC 2822 format (email/RSS)."""
     try:
         from email.utils import parsedate_to_datetime
+
         dt = parsedate_to_datetime(date_str)
         return dt.timestamp()
     except Exception:
@@ -213,6 +216,7 @@ def _parse_numeric_date(date_str: str) -> Optional[float]:
 # Time Window Utilities
 # =============================================================================
 
+
 def parse_time_window(time_window: str) -> Tuple[float, float]:
     """
     타임 윈도우 문자열을 시작/종료 타임스탬프로 변환.
@@ -256,8 +260,7 @@ def parse_time_window(time_window: str) -> Tuple[float, float]:
 
 
 def get_time_window_bounds(
-    time_window: str,
-    reference_time: Optional[float] = None
+    time_window: str, reference_time: Optional[float] = None
 ) -> Tuple[datetime, datetime]:
     """
     타임 윈도우의 시작/종료 datetime 객체 반환.
@@ -286,9 +289,7 @@ def get_time_window_bounds(
 
 
 def filter_by_time_window(
-    items: List[dict],
-    time_window: str,
-    timestamp_field: str = "published_at"
+    items: List[dict], time_window: str, timestamp_field: str = "published_at"
 ) -> List[dict]:
     """
     타임 윈도우로 아이템 필터링.
@@ -316,17 +317,12 @@ def filter_by_time_window(
         if ts and start_time <= ts <= end_time:
             filtered.append(item)
 
-    logger.info(
-        f"Filtered {len(items)} items to {len(filtered)} "
-        f"within {time_window} window"
-    )
+    logger.info(f"Filtered {len(items)} items to {len(filtered)} " f"within {time_window} window")
     return filtered
 
 
 def sort_by_time(
-    items: List[dict],
-    timestamp_field: str = "published_at",
-    descending: bool = True
+    items: List[dict], timestamp_field: str = "published_at", descending: bool = True
 ) -> List[dict]:
     """
     시간순으로 아이템 정렬.
@@ -339,6 +335,7 @@ def sort_by_time(
     Returns:
         정렬된 아이템 리스트
     """
+
     def get_timestamp(item: dict) -> float:
         ts = item.get(timestamp_field)
         if ts is None:
@@ -354,6 +351,7 @@ def sort_by_time(
 # =============================================================================
 # Utility Functions
 # =============================================================================
+
 
 def timestamp_to_iso(timestamp: float) -> str:
     """Unix timestamp를 ISO 8601 문자열로 변환."""
@@ -436,10 +434,10 @@ if __name__ == "__main__":
     # Test filtering
     print("\n=== Filtering Test ===")
     items = [
-        {"title": "Item 1", "published_at": time.time() - 3600},      # 1 hour ago
-        {"title": "Item 2", "published_at": time.time() - 86400},     # 1 day ago
-        {"title": "Item 3", "published_at": time.time() - 604800},    # 1 week ago
-        {"title": "Item 4", "published_at": time.time() - 2592000},   # 30 days ago
+        {"title": "Item 1", "published_at": time.time() - 3600},  # 1 hour ago
+        {"title": "Item 2", "published_at": time.time() - 86400},  # 1 day ago
+        {"title": "Item 3", "published_at": time.time() - 604800},  # 1 week ago
+        {"title": "Item 4", "published_at": time.time() - 2592000},  # 30 days ago
     ]
 
     filtered = filter_by_time_window(items, "7d")

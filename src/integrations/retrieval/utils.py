@@ -35,11 +35,7 @@ def build_corpus(items: List[Dict[str, Any]], text_fields: List[str] = None) -> 
 
 
 def retrieve_relevant_items(
-    query: str,
-    items: List[Dict[str, Any]],
-    top_k: int = 10,
-    vector_store=None,
-    llm_client=None
+    query: str, items: List[Dict[str, Any]], top_k: int = 10, vector_store=None, llm_client=None
 ) -> List[Dict[str, Any]]:
     """
     Retrieve relevant items using vector similarity search.
@@ -78,7 +74,7 @@ def retrieve_relevant_items(
             meta = {
                 "index": i,
                 "title": item.get("title", "")[:500],
-                "source": item.get("source", "")
+                "source": item.get("source", ""),
             }
             metadatas.append(meta)
 
@@ -103,11 +99,7 @@ def retrieve_relevant_items(
         return _keyword_retrieve(query, items, top_k)
 
 
-def _keyword_retrieve(
-    query: str,
-    items: List[Dict[str, Any]],
-    top_k: int
-) -> List[Dict[str, Any]]:
+def _keyword_retrieve(query: str, items: List[Dict[str, Any]], top_k: int) -> List[Dict[str, Any]]:
     """
     Simple keyword-based retrieval as fallback.
 

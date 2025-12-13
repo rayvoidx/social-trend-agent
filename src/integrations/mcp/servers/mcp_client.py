@@ -4,6 +4,7 @@ MCP Client Manager
 Manages connections to external MCP servers defined in mcp_config.json.
 Uses the Model Context Protocol to communicate with servers via stdio.
 """
+
 from __future__ import annotations
 
 import os
@@ -34,7 +35,7 @@ class MCPClient:
         command: str,
         args: List[str],
         env: Optional[Dict[str, str]] = None,
-        description: str = ""
+        description: str = "",
     ):
         self.name = name
         self.command = command
@@ -72,7 +73,7 @@ class MCPClient:
                 stdin=asyncio.subprocess.PIPE,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
-                env=process_env
+                env=process_env,
             )
             logger.info(f"Started MCP server: {self.name}")
 
@@ -99,17 +100,14 @@ class MCPClient:
 
     async def _initialize(self) -> None:
         """Send initialize request to the server."""
-        response = await self._send_request("initialize", {
-            "protocolVersion": "2024-11-05",
-            "capabilities": {
-                "roots": {"listChanged": True},
-                "sampling": {}
+        response = await self._send_request(
+            "initialize",
+            {
+                "protocolVersion": "2024-11-05",
+                "capabilities": {"roots": {"listChanged": True}, "sampling": {}},
+                "clientInfo": {"name": "social-trend-agent", "version": "1.0.0"},
             },
-            "clientInfo": {
-                "name": "social-trend-agent",
-                "version": "1.0.0"
-            }
-        })
+        )
 
         if response:
             # Send initialized notification
@@ -118,9 +116,7 @@ class MCPClient:
             logger.info(f"Initialized MCP server: {self.name}")
 
     async def _send_request(
-        self,
-        method: str,
-        params: Optional[Dict[str, Any]] = None
+        self, method: str, params: Optional[Dict[str, Any]] = None
     ) -> Optional[Dict[str, Any]]:
         """Send a JSON-RPC request and wait for response."""
         if not self.is_running:
@@ -142,10 +138,7 @@ class MCPClient:
 
         # Read response
         try:
-            response_line = await asyncio.wait_for(
-                self._process.stdout.readline(),
-                timeout=30.0
-            )
+            response_line = await asyncio.wait_for(self._process.stdout.readline(), timeout=30.0)
             if response_line:
                 response = json.loads(response_line.decode())
                 if "error" in response:
@@ -162,9 +155,7 @@ class MCPClient:
         return None
 
     async def _send_notification(
-        self,
-        method: str,
-        params: Optional[Dict[str, Any]] = None
+        self, method: str, params: Optional[Dict[str, Any]] = None
     ) -> None:
         """Send a JSON-RPC notification (no response expected)."""
         if not self.is_running:
@@ -192,18 +183,15 @@ class MCPClient:
         return []
 
     async def call_tool(
-        self,
-        name: str,
-        arguments: Optional[Dict[str, Any]] = None
+        self, name: str, arguments: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """Call a tool on the server."""
         if not self._initialized:
             await self.start()
 
-        response = await self._send_request("tools/call", {
-            "name": name,
-            "arguments": arguments or {}
-        })
+        response = await self._send_request(
+            "tools/call", {"name": name, "arguments": arguments or {}}
+        )
 
         if response:
             # Extract content from response
@@ -277,7 +265,7 @@ class MCPClientManager:
                     command=config.get("command", ""),
                     args=config.get("args", []),
                     env=config.get("env", {}),
-                    description=config.get("description", "")
+                    description=config.get("description", ""),
                 )
 
             self._loaded = True
@@ -299,11 +287,7 @@ class MCPClientManager:
             self.load_config()
 
         return [
-            {
-                "name": name,
-                "description": client.description,
-                "command": client.command
-            }
+            {"name": name, "description": client.description, "command": client.command}
             for name, client in self._clients.items()
         ]
 
@@ -334,10 +318,7 @@ class MCPClientManager:
                 await client.stop()
 
     async def call_tool(
-        self,
-        server_name: str,
-        tool_name: str,
-        arguments: Optional[Dict[str, Any]] = None
+        self, server_name: str, tool_name: str, arguments: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """Call a tool on a specific server."""
         client = self.get_client(server_name)
@@ -399,7 +380,7 @@ async def call_mcp_tool(
     server_name: str,
     tool_name: str,
     arguments: Optional[Dict[str, Any]] = None,
-    config_path: Optional[Path] = None
+    config_path: Optional[Path] = None,
 ) -> Dict[str, Any]:
     """
     Convenience function to call an MCP tool.

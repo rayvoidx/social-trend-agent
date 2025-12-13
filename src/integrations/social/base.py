@@ -1,6 +1,7 @@
 """
 Base classes for social media connectors.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -87,12 +88,7 @@ class SocialConnector(ABC):
         self._rate_limit_reset: Optional[float] = None
 
     @abstractmethod
-    def fetch_posts(
-        self,
-        query: str,
-        max_results: int = 20,
-        **kwargs
-    ) -> List[CollectedItem]:
+    def fetch_posts(self, query: str, max_results: int = 20, **kwargs) -> List[CollectedItem]:
         """
         Fetch posts matching the query.
 
@@ -125,12 +121,7 @@ class SocialConnector(ABC):
         self._rate_limit_remaining = remaining
         self._rate_limit_reset = reset_time
 
-    def _generate_sample_data(
-        self,
-        source: str,
-        query: str,
-        count: int
-    ) -> List[CollectedItem]:
+    def _generate_sample_data(self, source: str, query: str, count: int) -> List[CollectedItem]:
         """Generate sample data when API is not available."""
         items = []
         for i in range(count):
@@ -140,7 +131,7 @@ class SocialConnector(ABC):
                     title=f"{query} sample {i+1}",
                     url=f"https://example.com/{source}/{i+1}",
                     content=f"This is sample content about {query} from {source}. "
-                            f"Sample number {i+1}.",
+                    f"Sample number {i+1}.",
                     published_at=time.time() - (i * 3600),
                     language="en",
                     author=f"sample_user_{i % 5}",
@@ -169,17 +160,14 @@ def deduplicate_items(items: List[CollectedItem]) -> List[CollectedItem]:
 
 
 def filter_by_time_window(
-    items: List[CollectedItem],
-    start_time: float,
-    end_time: Optional[float] = None
+    items: List[CollectedItem], start_time: float, end_time: Optional[float] = None
 ) -> List[CollectedItem]:
     """Filter items by time window."""
     if end_time is None:
         end_time = time.time()
 
     filtered = [
-        item for item in items
-        if item.published_at and start_time <= item.published_at <= end_time
+        item for item in items if item.published_at and start_time <= item.published_at <= end_time
     ]
 
     logger.info(f"Filtered {len(items)} items to {len(filtered)} by time window")

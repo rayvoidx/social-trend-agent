@@ -5,6 +5,7 @@ Phase 3 유틸리티 통합: 재시도, 캐싱, 로깅
 Phase 6 구조화 출력 및 Self-Refine
 Phase 10 컨텍스트 프롬프트 고도화 (Wrtn Style)
 """
+
 import os
 import json
 import logging
@@ -18,7 +19,7 @@ from src.infrastructure.cache import cached
 from src.core.config import get_config_manager
 from src.core.utils import parse_timestamp, deduplicate_items
 from src.core.refine import RefineEngine
-from src.core.prompts import REPORT_GENERATION_PROMPT_TEMPLATE, DEFAULT_SYSTEM_PERSONA # Phase 10
+from src.core.prompts import REPORT_GENERATION_PROMPT_TEMPLATE, DEFAULT_SYSTEM_PERSONA  # Phase 10
 from src.core.routing import ModelRole, get_model_for_role
 from src.domain.plan import AgentPlan
 from src.domain.schemas import TrendInsight
@@ -39,12 +40,10 @@ logger = logging.getLogger("news_trend_agent")
 # Data Collection Tools
 # ============================================================================
 
+
 @cached(ttl=3600, use_disk=False)  # 1시간 동안 캐싱
 def search_news(
-    query: str,
-    time_window: str = "7d",
-    language: str = "ko",
-    max_results: int = 20
+    query: str, time_window: str = "7d", language: str = "ko", max_results: int = 20
 ) -> List[Dict[str, Any]]:
     """
     News API 및 Naver News API에서 뉴스 검색
@@ -84,18 +83,18 @@ def search_news(
 
     # 중복 제거
     unique_items = deduplicate_items(news_items, unique_keys=["url", "link", "id"])
-    
+
     # 타임스탬프 파싱 및 데이터 정규화
     final_items = []
     for item in unique_items[:max_results]:
         # 날짜 파싱 (기존 publishedAt은 유지하고 parsed_timestamp 추가)
         pub_str = item.get("publishedAt") or item.get("published_at") or item.get("pubDate")
         ts = parse_timestamp(pub_str)
-        
+
         item["published_timestamp"] = ts
         if not item.get("publishedAt") and pub_str:
-             item["publishedAt"] = pub_str # Ensure publishedAt exists if we found it elsewhere
-             
+            item["publishedAt"] = pub_str  # Ensure publishedAt exists if we found it elsewhere
+
         final_items.append(item)
 
     logger.info(f"News search completed: total_results={len(final_items)}")
@@ -124,29 +123,45 @@ def _get_sample_news(query: str, time_window: str, language: str) -> List[Dict[s
 
     sample_news = [
         {
-            "title": f"{query} 관련 최신 뉴스 1" if language == "ko" else f"Latest news about {query} 1",
-            "description": f"{query}에 대한 분석 내용입니다." if language == "ko" else f"Analysis about {query}.",
+            "title": (
+                f"{query} 관련 최신 뉴스 1" if language == "ko" else f"Latest news about {query} 1"
+            ),
+            "description": (
+                f"{query}에 대한 분석 내용입니다."
+                if language == "ko"
+                else f"Analysis about {query}."
+            ),
             "url": "https://example.com/news1",
             "source": {"name": "Sample News"},
             "publishedAt": (now - timedelta(hours=2)).isoformat(),
-            "content": f"{query} 관련 상세 내용" if language == "ko" else f"Detailed content about {query}"
+            "content": (
+                f"{query} 관련 상세 내용" if language == "ko" else f"Detailed content about {query}"
+            ),
         },
         {
             "title": f"{query} 트렌드 급상승" if language == "ko" else f"{query} trending up",
-            "description": f"{query} 관련 검색량이 증가하고 있습니다." if language == "ko" else f"Search volume for {query} is increasing.",
+            "description": (
+                f"{query} 관련 검색량이 증가하고 있습니다."
+                if language == "ko"
+                else f"Search volume for {query} is increasing."
+            ),
             "url": "https://example.com/news2",
             "source": {"name": "Sample News"},
             "publishedAt": (now - timedelta(hours=5)).isoformat(),
-            "content": f"{query} 트렌드 분석" if language == "ko" else f"Trend analysis of {query}"
+            "content": f"{query} 트렌드 분석" if language == "ko" else f"Trend analysis of {query}",
         },
         {
             "title": f"{query} 시장 반응" if language == "ko" else f"Market reaction to {query}",
-            "description": f"{query}에 대한 소비자 반응이 긍정적입니다." if language == "ko" else f"Consumer reaction to {query} is positive.",
+            "description": (
+                f"{query}에 대한 소비자 반응이 긍정적입니다."
+                if language == "ko"
+                else f"Consumer reaction to {query} is positive."
+            ),
             "url": "https://example.com/news3",
             "source": {"name": "Sample News"},
             "publishedAt": (now - timedelta(days=1)).isoformat(),
-            "content": f"{query} 시장 분석" if language == "ko" else f"Market analysis of {query}"
-        }
+            "content": f"{query} 시장 분석" if language == "ko" else f"Market analysis of {query}",
+        },
     ]
 
     return sample_news
@@ -155,6 +170,7 @@ def _get_sample_news(query: str, time_window: str, language: str) -> List[Dict[s
 # ============================================================================
 # Analysis Tools
 # ============================================================================
+
 
 def analyze_sentiment(items: List[Dict[str, Any]], use_llm: bool = True) -> Dict[str, Any]:
     """
@@ -171,8 +187,12 @@ def analyze_sentiment(items: List[Dict[str, Any]], use_llm: bool = True) -> Dict
 
     if not items:
         return {
-            "positive": 0, "neutral": 0, "negative": 0,
-            "positive_pct": 0, "neutral_pct": 0, "negative_pct": 0
+            "positive": 0,
+            "neutral": 0,
+            "negative": 0,
+            "positive_pct": 0,
+            "neutral_pct": 0,
+            "negative_pct": 0,
         }
 
     # LLM 기반 감성 분석
@@ -218,11 +238,14 @@ Return JSON format:
     sentiment_model = get_model_for_role("news_trend_agent", ModelRole.SENTIMENT)
     result = client.chat_json(
         messages=[
-            {"role": "system", "content": "You are a sentiment analysis expert. Analyze Korean and English text accurately."},
-            {"role": "user", "content": prompt}
+            {
+                "role": "system",
+                "content": "You are a sentiment analysis expert. Analyze Korean and English text accurately.",
+            },
+            {"role": "user", "content": prompt},
         ],
         temperature=0.2,
-        model=sentiment_model  # Model Routing: sentiment role (safe fallback handled in llm_client)
+        model=sentiment_model,  # Model Routing: sentiment role (safe fallback handled in llm_client)
     )
 
     total = len(items)
@@ -243,16 +266,44 @@ Return JSON format:
         "negative_pct": (negative / analyzed_total * 100) if analyzed_total > 0 else 0,
         "key_emotions": result.get("key_emotions", []),
         "summary": result.get("summary", ""),
-        "details": result.get("sentiment_details", [])
+        "details": result.get("sentiment_details", []),
     }
 
 
 def _analyze_sentiment_keyword(items: List[Dict[str, Any]]) -> Dict[str, Any]:
     """키워드 기반 감성 분석 (폴백)"""
-    positive_keywords = ["긍정", "성공", "성장", "증가", "호평", "좋", "기대", "상승",
-                        "positive", "success", "growth", "increase", "good", "excellent"]
-    negative_keywords = ["부정", "실패", "감소", "하락", "비판", "우려", "하락", "문제",
-                        "negative", "failure", "decrease", "decline", "bad", "concern"]
+    positive_keywords = [
+        "긍정",
+        "성공",
+        "성장",
+        "증가",
+        "호평",
+        "좋",
+        "기대",
+        "상승",
+        "positive",
+        "success",
+        "growth",
+        "increase",
+        "good",
+        "excellent",
+    ]
+    negative_keywords = [
+        "부정",
+        "실패",
+        "감소",
+        "하락",
+        "비판",
+        "우려",
+        "하락",
+        "문제",
+        "negative",
+        "failure",
+        "decrease",
+        "decline",
+        "bad",
+        "concern",
+    ]
 
     positive_count = 0
     neutral_count = 0
@@ -279,7 +330,7 @@ def _analyze_sentiment_keyword(items: List[Dict[str, Any]]) -> Dict[str, Any]:
         "negative": negative_count,
         "positive_pct": (positive_count / total * 100) if total > 0 else 0,
         "neutral_pct": (neutral_count / total * 100) if total > 0 else 0,
-        "negative_pct": (negative_count / total * 100) if total > 0 else 0
+        "negative_pct": (negative_count / total * 100) if total > 0 else 0,
     }
 
 
@@ -313,7 +364,7 @@ def extract_keywords(items: List[Dict[str, Any]], use_tfidf: bool = True) -> Dic
 def _extract_keywords_tfidf(items: List[Dict[str, Any]]) -> Dict[str, Any]:
     """TF-IDF 기반 키워드 추출"""
     try:
-        from sklearn.feature_extraction.text import TfidfVectorizer # type: ignore[import]
+        from sklearn.feature_extraction.text import TfidfVectorizer  # type: ignore[import]
         import numpy as np
     except ImportError:
         logger.warning("scikit-learn not installed, falling back to frequency-based")
@@ -331,18 +382,111 @@ def _extract_keywords_tfidf(items: List[Dict[str, Any]]) -> Dict[str, Any]:
     # Korean + English stop words
     stop_words = [
         # Korean
-        "은", "는", "이", "가", "을", "를", "에", "의", "와", "과", "도", "로", "으로",
-        "에서", "까지", "부터", "만", "뿐", "다", "고", "며", "면", "지", "든", "니",
-        "하다", "있다", "되다", "이다", "그", "저", "이", "것", "수", "등", "및",
+        "은",
+        "는",
+        "이",
+        "가",
+        "을",
+        "를",
+        "에",
+        "의",
+        "와",
+        "과",
+        "도",
+        "로",
+        "으로",
+        "에서",
+        "까지",
+        "부터",
+        "만",
+        "뿐",
+        "다",
+        "고",
+        "며",
+        "면",
+        "지",
+        "든",
+        "니",
+        "하다",
+        "있다",
+        "되다",
+        "이다",
+        "그",
+        "저",
+        "이",
+        "것",
+        "수",
+        "등",
+        "및",
         # English
-        "the", "a", "an", "is", "are", "was", "were", "be", "been", "being",
-        "have", "has", "had", "do", "does", "did", "will", "would", "could",
-        "should", "may", "might", "must", "shall", "can", "this", "that",
-        "these", "those", "i", "you", "he", "she", "it", "we", "they",
-        "what", "which", "who", "when", "where", "why", "how", "all",
-        "each", "every", "both", "few", "more", "most", "other", "some",
-        "such", "no", "nor", "not", "only", "own", "same", "so", "than",
-        "too", "very", "just", "also", "now", "said", "says"
+        "the",
+        "a",
+        "an",
+        "is",
+        "are",
+        "was",
+        "were",
+        "be",
+        "been",
+        "being",
+        "have",
+        "has",
+        "had",
+        "do",
+        "does",
+        "did",
+        "will",
+        "would",
+        "could",
+        "should",
+        "may",
+        "might",
+        "must",
+        "shall",
+        "can",
+        "this",
+        "that",
+        "these",
+        "those",
+        "i",
+        "you",
+        "he",
+        "she",
+        "it",
+        "we",
+        "they",
+        "what",
+        "which",
+        "who",
+        "when",
+        "where",
+        "why",
+        "how",
+        "all",
+        "each",
+        "every",
+        "both",
+        "few",
+        "more",
+        "most",
+        "other",
+        "some",
+        "such",
+        "no",
+        "nor",
+        "not",
+        "only",
+        "own",
+        "same",
+        "so",
+        "than",
+        "too",
+        "very",
+        "just",
+        "also",
+        "now",
+        "said",
+        "says",
     ]
 
     # TF-IDF Vectorizer
@@ -352,7 +496,7 @@ def _extract_keywords_tfidf(items: List[Dict[str, Any]]) -> Dict[str, Any]:
         ngram_range=(1, 2),  # Unigrams and bigrams
         min_df=1,
         max_df=0.9,
-        token_pattern=r'(?u)\b[가-힣a-zA-Z]{2,}\b'  # Korean + English, min 2 chars
+        token_pattern=r"(?u)\b[가-힣a-zA-Z]{2,}\b",  # Korean + English, min 2 chars
     )
 
     try:
@@ -368,7 +512,11 @@ def _extract_keywords_tfidf(items: List[Dict[str, Any]]) -> Dict[str, Any]:
 
         # Get top keywords
         top_keywords = [
-            {"keyword": kw, "score": round(float(score), 4), "count": int((tfidf_matrix[:, i].toarray() > 0).sum())}
+            {
+                "keyword": kw,
+                "score": round(float(score), 4),
+                "count": int((tfidf_matrix[:, i].toarray() > 0).sum()),
+            }
             for i, (kw, score) in enumerate(keyword_scores[:20])
             if score > 0.01
         ]
@@ -382,7 +530,7 @@ def _extract_keywords_tfidf(items: List[Dict[str, Any]]) -> Dict[str, Any]:
             "top_keywords": top_keywords,
             "total_unique_keywords": len(feature_names),
             "method": "tfidf",
-            "ngram_range": "1-2"
+            "ngram_range": "1-2",
         }
 
     except Exception as e:
@@ -394,15 +542,44 @@ def _extract_keywords_frequency(items: List[Dict[str, Any]]) -> Dict[str, Any]:
     """빈도 기반 키워드 추출 (폴백)"""
     word_freq: Dict[str, int] = {}
     stop_words = {
-        "the", "a", "an", "is", "are", "was", "were", "be", "have", "has",
-        "을", "를", "이", "가", "은", "는", "에", "의", "와", "과", "도", "로",
-        "this", "that", "it", "for", "on", "with", "as", "at", "by", "from"
+        "the",
+        "a",
+        "an",
+        "is",
+        "are",
+        "was",
+        "were",
+        "be",
+        "have",
+        "has",
+        "을",
+        "를",
+        "이",
+        "가",
+        "은",
+        "는",
+        "에",
+        "의",
+        "와",
+        "과",
+        "도",
+        "로",
+        "this",
+        "that",
+        "it",
+        "for",
+        "on",
+        "with",
+        "as",
+        "at",
+        "by",
+        "from",
     }
 
     for item in items:
         text = (item.get("title", "") + " " + item.get("description", "")).lower()
         # Simple tokenization
-        words = re.findall(r'[가-힣a-zA-Z]{2,}', text)
+        words = re.findall(r"[가-힣a-zA-Z]{2,}", text)
 
         for word in words:
             if word not in stop_words:
@@ -411,15 +588,12 @@ def _extract_keywords_frequency(items: List[Dict[str, Any]]) -> Dict[str, Any]:
     # Sort by frequency
     sorted_keywords = sorted(word_freq.items(), key=lambda x: x[1], reverse=True)
 
-    top_keywords = [
-        {"keyword": kw, "count": count}
-        for kw, count in sorted_keywords[:20]
-    ]
+    top_keywords = [{"keyword": kw, "count": count} for kw, count in sorted_keywords[:20]]
 
     return {
         "top_keywords": top_keywords,
         "total_unique_keywords": len(word_freq),
-        "method": "frequency"
+        "method": "frequency",
     }
 
 
@@ -442,7 +616,9 @@ def _get_llm():
             provider = str(agent_cfg.llm.provider)
         model_name = agent_cfg.llm.model_name or None
 
-    logger.info(f"Initializing LLM for news_trend_agent: provider={provider}, model={model_name or 'auto'}")
+    logger.info(
+        f"Initializing LLM for news_trend_agent: provider={provider}, model={model_name or 'auto'}"
+    )
 
     if provider == "azure_openai" or provider == "azure":
         deployment_name = (
@@ -524,11 +700,11 @@ def summarize_trend(
     prompt = REPORT_GENERATION_PROMPT_TEMPLATE.format(
         system_persona=DEFAULT_SYSTEM_PERSONA,
         query=query,
-        positive_pct=sentiment.get('positive_pct', 0),
-        negative_pct=sentiment.get('negative_pct', 0),
-        neutral_pct=sentiment.get('neutral_pct', 0),
+        positive_pct=sentiment.get("positive_pct", 0),
+        negative_pct=sentiment.get("negative_pct", 0),
+        neutral_pct=sentiment.get("neutral_pct", 0),
         keywords_str=keywords_str,
-        headlines_str=headlines_str
+        headlines_str=headlines_str,
     )
 
     try:
@@ -568,7 +744,10 @@ def summarize_trend(
             )
             brief = client.chat(
                 messages=[
-                    {"role": "system", "content": "You are a cheap gateway summarizer. Be concise and grounded."},
+                    {
+                        "role": "system",
+                        "content": "You are a cheap gateway summarizer. Be concise and grounded.",
+                    },
                     {"role": "user", "content": synth_prompt},
                 ],
                 temperature=0.3,
@@ -591,7 +770,10 @@ def summarize_trend(
 
         plan_dict = client.chat_json(
             messages=[
-                {"role": "system", "content": "You are a strict planning engine. Output JSON only."},
+                {
+                    "role": "system",
+                    "content": "You are a strict planning engine. Output JSON only.",
+                },
                 {"role": "user", "content": plan_prompt},
             ],
             schema=AgentPlan.model_json_schema(),
@@ -613,7 +795,10 @@ def summarize_trend(
 
         synthesized_context = client.chat(
             messages=[
-                {"role": "system", "content": "You are a context synthesizer. Be concise and factual."},
+                {
+                    "role": "system",
+                    "content": "You are a context synthesizer. Be concise and factual.",
+                },
                 {"role": "user", "content": synth_prompt},
             ],
             temperature=0.3,
@@ -686,6 +871,7 @@ def summarize_trend(
 # ============================================================================
 # Simple RAG + Guardrails (Python parity)
 # ============================================================================
+
 
 def _retrieve_relevant_items_keyword(
     query: str,

@@ -12,6 +12,7 @@ SNS 데이터 수집용 MCP 클라이언트 래퍼
 - SUPADATA_TIKTOK_TOOL  : TikTok 검색용 MCP 툴 이름 (default: tiktok_search)
 - SUPADATA_YOUTUBE_TOOL : YouTube 트렌딩용 MCP 툴 이름 (default: youtube_trending)
 """
+
 from __future__ import annotations
 
 import os
@@ -123,7 +124,9 @@ async def fetch_tiktok_videos_via_mcp_async(
 
     _, videos = parse_supadata_tiktok_videos(result or {})
     if not videos:
-        logger.warning("Supadata TikTok tool returned no parseable videos. Check SUPADATA_TIKTOK_TOOL.")
+        logger.warning(
+            "Supadata TikTok tool returned no parseable videos. Check SUPADATA_TIKTOK_TOOL."
+        )
         return []
 
     out: List[Dict[str, Any]] = []
@@ -182,7 +185,9 @@ async def fetch_youtube_videos_via_mcp_async(
 
     _, videos = parse_supadata_youtube_videos(result or {})
     if not videos:
-        logger.warning("Supadata YouTube tool returned no parseable videos. Check SUPADATA_YOUTUBE_TOOL.")
+        logger.warning(
+            "Supadata YouTube tool returned no parseable videos. Check SUPADATA_YOUTUBE_TOOL."
+        )
         return []
 
     out: List[Dict[str, Any]] = []
@@ -227,15 +232,15 @@ async def fetch_all_sns_trends_async(
     모든 SNS 플랫폼(X, TikTok, YouTube) 데이터를 병렬로 수집합니다.
     """
     logger.info(f"Starting parallel SNS collection for query: {query}")
-    
+
     # YouTube는 검색어가 아니라 market 트렌딩이므로 query 영향 없음 (필요시 검색 툴로 변경 가능)
     # 현재 스펙상 YouTube는 trending, 나머지는 keyword search
-    
+
     results = await asyncio.gather(
         fetch_x_posts_via_mcp_async(query, max_results=max_results),
         fetch_tiktok_videos_via_mcp_async(query, max_count=max_results),
         fetch_youtube_videos_via_mcp_async(market=market, max_results=max_results),
-        return_exceptions=True
+        return_exceptions=True,
     )
 
     x_res, tiktok_res, youtube_res = results
@@ -246,7 +251,7 @@ async def fetch_all_sns_trends_async(
         "tiktok": tiktok_res if isinstance(tiktok_res, list) else [],
         "youtube": youtube_res if isinstance(youtube_res, list) else [],
     }
-    
+
     total_count = sum(len(v) for v in final_results.values())
     logger.info(f"Parallel collection finished. Total items: {total_count}")
     return final_results

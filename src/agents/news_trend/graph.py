@@ -4,6 +4,7 @@
 LangGraph 공식 패턴과 에러 핸들링, 로깅 기능을 적용했습니다.
 Human-in-the-loop (검토/승인) 워크플로우가 포함되어 있습니다.
 """
+
 import os
 import uuid
 import logging
@@ -106,11 +107,21 @@ def collect_node(state: NewsAgentState) -> Dict[str, Any]:
     result = PartialResult(status=CompletionStatus.FULL)
 
     steps = state.plan.get("steps") if isinstance(state.plan, dict) else []
-    current_step_id = (state.plan_execution or {}).get("current_step_id") if isinstance(state.plan_execution, dict) else None
-    rp = get_retry_policy_for_step(steps, current_step_id) or get_retry_policy_for_op(steps, "collect")
+    current_step_id = (
+        (state.plan_execution or {}).get("current_step_id")
+        if isinstance(state.plan_execution, dict)
+        else None
+    )
+    rp = get_retry_policy_for_step(steps, current_step_id) or get_retry_policy_for_op(
+        steps, "collect"
+    )
     timeout_s = get_timeout_for_step(steps, current_step_id) or get_timeout_for_op(steps, "collect")
     cb = get_circuit_breaker_for_step(steps, current_step_id)
-    strict = isinstance(cb, dict) and isinstance(cb.get("failure_threshold"), int) and cb.get("failure_threshold", 0) > 0
+    strict = (
+        isinstance(cb, dict)
+        and isinstance(cb.get("failure_threshold"), int)
+        and cb.get("failure_threshold", 0) > 0
+    )
 
     raw_items = safe_api_call(
         "search_news",
@@ -128,10 +139,7 @@ def collect_node(state: NewsAgentState) -> Dict[str, Any]:
 
     logger.node_end("collect", output_size=len(raw_items))
 
-    return {
-        "raw_items": raw_items,
-        "error": result.errors[0] if result.errors else None
-    }
+    return {"raw_items": raw_items, "error": result.errors[0] if result.errors else None}
 
 
 def normalize_node(state: NewsAgentState) -> Dict[str, Any]:
@@ -150,14 +158,20 @@ def normalize_node(state: NewsAgentState) -> Dict[str, Any]:
     normalized = []
     for item in state.raw_items:
         # Clean HTML tags and normalize fields
-        normalized.append({
-            "title": item.get("title", "").strip(),
-            "description": item.get("description", "").strip(),
-            "url": item.get("url", ""),
-            "source": item.get("source", {}).get("name", "Unknown") if isinstance(item.get("source"), dict) else str(item.get("source", "Unknown")),
-            "published_at": item.get("publishedAt", ""),
-            "content": item.get("content", "").strip()
-        })
+        normalized.append(
+            {
+                "title": item.get("title", "").strip(),
+                "description": item.get("description", "").strip(),
+                "url": item.get("url", ""),
+                "source": (
+                    item.get("source", {}).get("name", "Unknown")
+                    if isinstance(item.get("source"), dict)
+                    else str(item.get("source", "Unknown"))
+                ),
+                "published_at": item.get("publishedAt", ""),
+                "content": item.get("content", "").strip(),
+            }
+        )
 
     logger.node_end("normalize", output_size=len(normalized))
 
@@ -177,11 +191,21 @@ def analyze_node(state: NewsAgentState) -> Dict[str, Any]:
         logger.node_end("analyze", output_size=len(state.normalized))
         return {}
 
-    current_step_id = (state.plan_execution or {}).get("current_step_id") if isinstance(state.plan_execution, dict) else None
-    rp = get_retry_policy_for_step(steps, current_step_id) or get_retry_policy_for_op(steps, "analyze")
+    current_step_id = (
+        (state.plan_execution or {}).get("current_step_id")
+        if isinstance(state.plan_execution, dict)
+        else None
+    )
+    rp = get_retry_policy_for_step(steps, current_step_id) or get_retry_policy_for_op(
+        steps, "analyze"
+    )
     timeout_s = get_timeout_for_step(steps, current_step_id) or get_timeout_for_op(steps, "analyze")
     cb = get_circuit_breaker_for_step(steps, current_step_id)
-    strict = isinstance(cb, dict) and isinstance(cb.get("failure_threshold"), int) and cb.get("failure_threshold", 0) > 0
+    strict = (
+        isinstance(cb, dict)
+        and isinstance(cb.get("failure_threshold"), int)
+        and cb.get("failure_threshold", 0) > 0
+    )
 
     # Analyze sentiment with error handling
     result_sentiment = PartialResult(status=CompletionStatus.FULL)
@@ -212,7 +236,7 @@ def analyze_node(state: NewsAgentState) -> Dict[str, Any]:
     analysis = {
         "sentiment": sentiment_results,
         "keywords": keyword_results,
-        "total_items": len(state.normalized)
+        "total_items": len(state.normalized),
     }
 
     logger.node_end("analyze", output_size=len(state.normalized))
@@ -232,7 +256,11 @@ def rag_node(state: NewsAgentState) -> Dict[str, Any]:
     routed = (state.analysis or {}).get("_routing", {}) if isinstance(state.analysis, dict) else {}
     rag_mode = str(routed.get("rag_mode") or "graph").lower()
     rag_top_k = routed.get("rag_top_k")
-    top_k = int(rag_top_k) if isinstance(rag_top_k, int) and rag_top_k > 0 else min(10, len(state.normalized))
+    top_k = (
+        int(rag_top_k)
+        if isinstance(rag_top_k, int) and rag_top_k > 0
+        else min(10, len(state.normalized))
+    )
 
     steps = state.plan.get("steps") if isinstance(state.plan, dict) else []
     if isinstance(steps, list) and steps and not has_step(steps, "rag"):
@@ -242,7 +270,9 @@ def rag_node(state: NewsAgentState) -> Dict[str, Any]:
         relevant = state.normalized[: max(1, top_k)]
     else:
         use_graph = rag_mode != "vector"
-        relevant = retrieve_relevant_items(state.query, state.normalized, top_k, use_graph=use_graph)
+        relevant = retrieve_relevant_items(
+            state.query, state.normalized, top_k, use_graph=use_graph
+        )
 
     logger.node_end("rag", output_size=len(relevant))
     return {"analysis": {**state.analysis, "_rag_relevant": relevant}}
@@ -262,7 +292,11 @@ def summarize_node(state: NewsAgentState) -> Dict[str, Any]:
     routed = (state.analysis or {}).get("_routing", {}) if isinstance(state.analysis, dict) else {}
     rag_mode = str(routed.get("rag_mode") or "graph").lower()
     rag_top_k = routed.get("rag_top_k")
-    top_k = int(rag_top_k) if isinstance(rag_top_k, int) and rag_top_k > 0 else min(10, len(state.normalized))
+    top_k = (
+        int(rag_top_k)
+        if isinstance(rag_top_k, int) and rag_top_k > 0
+        else min(10, len(state.normalized))
+    )
 
     # If plan has no rag step, force no-rag (strong binding)
     steps = state.plan.get("steps") if isinstance(state.plan, dict) else []
@@ -270,7 +304,9 @@ def summarize_node(state: NewsAgentState) -> Dict[str, Any]:
         rag_mode = "none"
 
     # If rag_node already computed a subset, reuse it
-    cached = (state.analysis or {}).get("_rag_relevant") if isinstance(state.analysis, dict) else None
+    cached = (
+        (state.analysis or {}).get("_rag_relevant") if isinstance(state.analysis, dict) else None
+    )
     if isinstance(cached, list) and cached:
         relevant = cached
     else:
@@ -278,14 +314,28 @@ def summarize_node(state: NewsAgentState) -> Dict[str, Any]:
             relevant = state.normalized[: max(1, top_k)]
         else:
             use_graph = rag_mode != "vector"
-            relevant = retrieve_relevant_items(state.query, state.normalized, top_k, use_graph=use_graph)
+            relevant = retrieve_relevant_items(
+                state.query, state.normalized, top_k, use_graph=use_graph
+            )
 
     steps = state.plan.get("steps") if isinstance(state.plan, dict) else []
-    current_step_id = (state.plan_execution or {}).get("current_step_id") if isinstance(state.plan_execution, dict) else None
-    rp = get_retry_policy_for_step(steps, current_step_id) or get_retry_policy_for_op(steps, "summarize")
-    timeout_s = get_timeout_for_step(steps, current_step_id) or get_timeout_for_op(steps, "summarize")
+    current_step_id = (
+        (state.plan_execution or {}).get("current_step_id")
+        if isinstance(state.plan_execution, dict)
+        else None
+    )
+    rp = get_retry_policy_for_step(steps, current_step_id) or get_retry_policy_for_op(
+        steps, "summarize"
+    )
+    timeout_s = get_timeout_for_step(steps, current_step_id) or get_timeout_for_op(
+        steps, "summarize"
+    )
     cb = get_circuit_breaker_for_step(steps, current_step_id)
-    strict = isinstance(cb, dict) and isinstance(cb.get("failure_threshold"), int) and cb.get("failure_threshold", 0) > 0
+    strict = (
+        isinstance(cb, dict)
+        and isinstance(cb.get("failure_threshold"), int)
+        and cb.get("failure_threshold", 0) > 0
+    )
 
     # summarize_trend is @backoff_retry-decorated; pass plan policy through to decorator to avoid double-retry
     raw_summary = safe_api_call(
@@ -307,7 +357,11 @@ def summarize_node(state: NewsAgentState) -> Dict[str, Any]:
 
     # Guardrails
     pii = redact_pii(raw_summary)
-    safety = check_safety(pii["redacted"]) if isinstance(pii, dict) else {"unsafe": False, "categories": []}
+    safety = (
+        check_safety(pii["redacted"])
+        if isinstance(pii, dict)
+        else {"unsafe": False, "categories": []}
+    )
     summary = pii["redacted"] if isinstance(pii, dict) else raw_summary
 
     logger.node_end("summarize", output_size=len(summary))
@@ -339,71 +393,87 @@ def report_node(state: NewsAgentState) -> Dict[str, Any]:
     ]
 
     sentiment = state.analysis.get("sentiment", {})
-    report_lines.extend([
-        f"- 긍정: {sentiment.get('positive', 0)}개 ({sentiment.get('positive_pct', 0):.1f}%)",
-        f"- 중립: {sentiment.get('neutral', 0)}개 ({sentiment.get('neutral_pct', 0):.1f}%)",
-        f"- 부정: {sentiment.get('negative', 0)}개 ({sentiment.get('negative_pct', 0):.1f}%)",
-        f"",
-        f"---",
-        f"",
-        f"## 🔑 핵심 키워드",
-        f"",
-    ])
+    report_lines.extend(
+        [
+            f"- 긍정: {sentiment.get('positive', 0)}개 ({sentiment.get('positive_pct', 0):.1f}%)",
+            f"- 중립: {sentiment.get('neutral', 0)}개 ({sentiment.get('neutral_pct', 0):.1f}%)",
+            f"- 부정: {sentiment.get('negative', 0)}개 ({sentiment.get('negative_pct', 0):.1f}%)",
+            f"",
+            f"---",
+            f"",
+            f"## 🔑 핵심 키워드",
+            f"",
+        ]
+    )
 
     keywords = state.analysis.get("keywords", {}).get("top_keywords", [])
     for kw in keywords[:10]:
         report_lines.append(f"- **{kw['keyword']}** ({kw['count']}회)")
 
-    report_lines.extend([
-        f"",
-        f"---",
-        f"",
-        f"## 💡 주요 인사이트",
-        f"",
-        state.analysis.get("summary", "No summary available."),
-        f"",
-    ])
+    report_lines.extend(
+        [
+            f"",
+            f"---",
+            f"",
+            f"## 💡 주요 인사이트",
+            f"",
+            state.analysis.get("summary", "No summary available."),
+            f"",
+        ]
+    )
 
     analysis = state.analysis if isinstance(state.analysis, dict) else {}
     safety = analysis.get("safety", {})
     if safety:  # dict가 비어있지 않으면
         if safety.get("pii_found") or safety.get("unsafe"):
-            report_lines.extend([
-                f"---",
-                f"",
-                f"## 🔒 안전 및 프라이버시",
-                f"",
-                f"- 일부 PII 정보가 마스킹되었습니다." if safety.get("pii_found") else "",
-                f"- 안전 카테고리 감지: {', '.join(safety.get('categories', []))}" if safety.get("unsafe") else "",
-                f"",
-            ])
+            report_lines.extend(
+                [
+                    f"---",
+                    f"",
+                    f"## 🔒 안전 및 프라이버시",
+                    f"",
+                    f"- 일부 PII 정보가 마스킹되었습니다." if safety.get("pii_found") else "",
+                    (
+                        f"- 안전 카테고리 감지: {', '.join(safety.get('categories', []))}"
+                        if safety.get("unsafe")
+                        else ""
+                    ),
+                    f"",
+                ]
+            )
 
-    report_lines.extend([
-        f"---",
-        f"",
-        f"## 📰 주요 뉴스 (Top 5)",
-        f"",
-    ])
+    report_lines.extend(
+        [
+            f"---",
+            f"",
+            f"## 📰 주요 뉴스 (Top 5)",
+            f"",
+        ]
+    )
 
     for i, item in enumerate(state.normalized[:5], 1):
-        report_lines.extend([
-            f"### {i}. {item['title']}",
-            f"**출처**: [{item['source']}]({item['url']})",
-            f"**발행일**: {item['published_at']}",
-            f"",
-            f"{item['description']}",
-            f"",
-        ])
+        report_lines.extend(
+            [
+                f"### {i}. {item['title']}",
+                f"**출처**: [{item['source']}]({item['url']})",
+                f"**발행일**: {item['published_at']}",
+                f"",
+                f"{item['description']}",
+                f"",
+            ]
+        )
 
-    report_lines.extend([
-        f"---",
-        f"",
-        f"**⚠️ 주의**: 본 리포트는 AI가 생성한 분석으로, 사실 확인이 필요합니다.",
-        f"출처 링크를 반드시 확인하세요.",
-        f"",
-        f"**Run ID**: `{state.run_id}`",
-        f""
-    ])
+    report_lines.extend(
+        [
+            f"---",
+            f"",
+            f"**⚠️ 주의**: 본 리포트는 AI가 생성한 분석으로, 사실 확인이 필요합니다.",
+            f"출처 링크를 반드시 확인하세요.",
+            f"",
+            f"**Run ID**: `{state.run_id}`",
+            f"",
+        ]
+    )
 
     report_md = "\n".join(report_lines)
 
@@ -411,7 +481,7 @@ def report_node(state: NewsAgentState) -> Dict[str, Any]:
     metrics = {
         "coverage": len(state.normalized) / max(state.max_results, 1),
         "factuality": 1.0 if all(item.get("url") for item in state.normalized) else 0.0,
-        "actionability": 1.0 if state.analysis.get("summary") else 0.0
+        "actionability": 1.0 if state.analysis.get("summary") else 0.0,
     }
 
     logger.node_end("report", output_size=len(report_md))
@@ -465,11 +535,12 @@ def notify_node(state: NewsAgentState) -> Dict[str, Any]:
     if n8n_webhook:
         try:
             import requests
+
             payload = {
                 "query": state.query,
                 "metrics": state.metrics,
                 "run_id": state.run_id,
-                "summary": state.analysis.get("summary", "")[:500]  # First 500 chars
+                "summary": state.analysis.get("summary", "")[:500],  # First 500 chars
             }
             response = requests.post(n8n_webhook, json=payload, timeout=10)
             if response.status_code == 200:
@@ -483,6 +554,7 @@ def notify_node(state: NewsAgentState) -> Dict[str, Any]:
     if slack_webhook:
         try:
             import requests
+
             payload = {
                 "text": f"📊 트렌드 분석 완료: {state.query}",
                 "blocks": [
@@ -490,10 +562,10 @@ def notify_node(state: NewsAgentState) -> Dict[str, Any]:
                         "type": "section",
                         "text": {
                             "type": "mrkdwn",
-                            "text": f"*검색어*: {state.query}\n*분석 항목*: {len(state.normalized)}건"
-                        }
+                            "text": f"*검색어*: {state.query}\n*분석 항목*: {len(state.normalized)}건",
+                        },
                     }
-                ]
+                ],
             }
             response = requests.post(slack_webhook, json=payload, timeout=10)
             if response.status_code == 200:
@@ -510,7 +582,7 @@ def notify_node(state: NewsAgentState) -> Dict[str, Any]:
 def build_graph(checkpointer: Optional[Any] = None):
     """
     뉴스 트렌드 에이전트용 LangGraph 구축
-    
+
     Args:
         checkpointer: 상태 저장을 위한 체크포인터 (선택 사항)
     """
@@ -546,8 +618,7 @@ def build_graph(checkpointer: Optional[Any] = None):
 
     # Compile graph with checkpointer and interrupt logic
     compiled_graph = graph.compile(
-        checkpointer=checkpointer,
-        interrupt_before=["report"] if checkpointer else None
+        checkpointer=checkpointer, interrupt_before=["report"] if checkpointer else None
     )
 
     _module_logger.info(f"LangGraph compiled (HITL: {bool(checkpointer)})")
@@ -572,7 +643,9 @@ def run_agent(
         run_id = str(uuid.uuid4())
 
     logger = AgentLogger("news_trend_agent", run_id)
-    logger.info("Starting news trend agent", query=query, time_window=time_window, language=language)
+    logger.info(
+        "Starting news trend agent", query=query, time_window=time_window, language=language
+    )
 
     # Create initial state
     initial_state = NewsAgentState(
@@ -623,19 +696,23 @@ def run_agent(
                 snapshot = graph.get_state(config)
                 if snapshot.next and "report" in snapshot.next:
                     logger.info("⏸️  Workflow paused for approval before report generation.")
-                    print("\n" + "="*50)
+                    print("\n" + "=" * 50)
                     print("✋  APPROVAL REQUIRED")
-                    print("="*50)
+                    print("=" * 50)
                     print(f"Analysis complete for query: '{query}'")
-                    print("Summary: " + str(current_state.get("analysis", {}).get("summary", "")[:100]) + "...")
+                    print(
+                        "Summary: "
+                        + str(current_state.get("analysis", {}).get("summary", "")[:100])
+                        + "..."
+                    )
                     print("-" * 50)
                     while True:
                         choice = input("Proceed to generate report? (y/n): ").strip().lower()
-                        if choice == 'y':
+                        if choice == "y":
                             logger.info("✅ Approved. Resuming...")
                             current_state = graph.invoke(None, config=config)
                             break
-                        elif choice == 'n':
+                        elif choice == "n":
                             logger.info("🛑 Aborted by user.")
                             return NewsAgentState(**current_state)
                         else:
@@ -649,7 +726,12 @@ def run_agent(
             logger.error("News trend agent failed", error=str(e), run_id=run_id)
             raise
     # Optional: use advanced graph (loop/parallel/conditional edges) for 2025-style execution
-    use_advanced = os.getenv("NEWS_TREND_ADVANCED_GRAPH", "").strip().lower() in ("1", "true", "yes", "on")
+    use_advanced = os.getenv("NEWS_TREND_ADVANCED_GRAPH", "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    )
     if not use_advanced:
         try:
             cfg = get_config_manager()
@@ -661,6 +743,7 @@ def run_agent(
 
     if use_advanced:
         from src.agents.news_trend.graph_advanced import build_advanced_graph
+
         graph = build_advanced_graph()
     else:
         graph = build_graph(checkpointer=checkpointer)
@@ -670,35 +753,39 @@ def run_agent(
         # 1. Start execution (runs until 'report' interrupt)
         logger.info("Running workflow...")
         current_state = graph.invoke(initial_state, config=config)
-        
+
         # 2. Check for interrupt
         if require_approval:
             snapshot = graph.get_state(config)
             if snapshot.next and "report" in snapshot.next:
                 logger.info("⏸️  Workflow paused for approval before report generation.")
-                
+
                 # Simple CLI interaction
-                print("\n" + "="*50)
+                print("\n" + "=" * 50)
                 print("✋  APPROVAL REQUIRED")
-                print("="*50)
+                print("=" * 50)
                 print(f"Analysis complete for query: '{query}'")
-                print("Summary: " + str(current_state.get("analysis", {}).get("summary", "")[:100]) + "...")
+                print(
+                    "Summary: "
+                    + str(current_state.get("analysis", {}).get("summary", "")[:100])
+                    + "..."
+                )
                 print("-" * 50)
-                
+
                 while True:
                     choice = input("Proceed to generate report? (y/n): ").strip().lower()
-                    if choice == 'y':
+                    if choice == "y":
                         logger.info("✅ Approved. Resuming...")
                         current_state = graph.invoke(None, config=config)
                         break
-                    elif choice == 'n':
+                    elif choice == "n":
                         logger.info("🛑 Aborted by user.")
-                        return NewsAgentState(**current_state) # Return partial state
+                        return NewsAgentState(**current_state)  # Return partial state
                     else:
                         print("Please enter 'y' or 'n'.")
-        
+
         logger.info("News trend agent completed successfully", run_id=run_id)
-        
+
         # Ensure result is NewsAgentState
         if isinstance(current_state, dict):
             return NewsAgentState(**current_state)

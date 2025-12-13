@@ -5,6 +5,7 @@ Supports:
 - TikTok for Business API
 - Third-party connectors (Brandwatch, Talkwalker, etc.)
 """
+
 from __future__ import annotations
 
 import logging
@@ -45,18 +46,14 @@ class TikTokClient(SocialConnector):
     def is_configured(self) -> bool:
         """Check if TikTok API credentials are configured."""
         return bool(
-            (self._access_token and self._app_id) or
-            (self._connector_token and self._connector_url) or
-            self._brandwatch_key or
-            self._talkwalker_key
+            (self._access_token and self._app_id)
+            or (self._connector_token and self._connector_url)
+            or self._brandwatch_key
+            or self._talkwalker_key
         )
 
     def fetch_posts(
-        self,
-        query: str,
-        max_results: int = 20,
-        market: str = "KR",
-        **kwargs
+        self, query: str, max_results: int = 20, market: str = "KR", **kwargs
     ) -> List[CollectedItem]:
         """
         Fetch TikTok posts/videos.
@@ -95,10 +92,7 @@ class TikTokClient(SocialConnector):
             return self._generate_sample_data("tiktok", query, max_results)
 
     def _fetch_via_business_api(
-        self,
-        query: str,
-        max_results: int,
-        market: str
+        self, query: str, max_results: int, market: str
     ) -> List[CollectedItem]:
         """Fetch data via TikTok for Business API."""
         # TikTok Business API endpoints
@@ -114,12 +108,7 @@ class TikTokClient(SocialConnector):
             "max_count": max_results,
         }
 
-        response = requests.get(
-            url,
-            headers=headers,
-            params=params,
-            timeout=self.timeout
-        )
+        response = requests.get(url, headers=headers, params=params, timeout=self.timeout)
         response.raise_for_status()
         data = response.json()
 
@@ -131,10 +120,7 @@ class TikTokClient(SocialConnector):
         return items
 
     def _fetch_via_connector(
-        self,
-        query: str,
-        max_results: int,
-        market: str
+        self, query: str, max_results: int, market: str
     ) -> List[CollectedItem]:
         """Fetch data via third-party connector."""
         headers = {
@@ -150,10 +136,7 @@ class TikTokClient(SocialConnector):
         }
 
         response = requests.get(
-            self._connector_url,
-            headers=headers,
-            params=params,
-            timeout=self.timeout
+            self._connector_url, headers=headers, params=params, timeout=self.timeout
         )
         response.raise_for_status()
         data = response.json()
@@ -165,11 +148,7 @@ class TikTokClient(SocialConnector):
         logger.info(f"Fetched {len(items)} videos from TikTok connector")
         return items
 
-    def _fetch_via_brandwatch(
-        self,
-        query: str,
-        max_results: int
-    ) -> List[CollectedItem]:
+    def _fetch_via_brandwatch(self, query: str, max_results: int) -> List[CollectedItem]:
         """Fetch data via Brandwatch API."""
         url = "https://api.brandwatch.com/projects/{project}/data/mentions"
 
@@ -189,10 +168,7 @@ class TikTokClient(SocialConnector):
         }
 
         response = requests.get(
-            url.format(project=project_id),
-            headers=headers,
-            params=params,
-            timeout=self.timeout
+            url.format(project=project_id), headers=headers, params=params, timeout=self.timeout
         )
         response.raise_for_status()
         data = response.json()
@@ -216,11 +192,7 @@ class TikTokClient(SocialConnector):
 
         return items
 
-    def _fetch_via_talkwalker(
-        self,
-        query: str,
-        max_results: int
-    ) -> List[CollectedItem]:
+    def _fetch_via_talkwalker(self, query: str, max_results: int) -> List[CollectedItem]:
         """Fetch data via Talkwalker API."""
         url = "https://api.talkwalker.com/api/v1/search/p/{project}/results"
 
@@ -238,10 +210,7 @@ class TikTokClient(SocialConnector):
         }
 
         response = requests.get(
-            url.format(project=project_id),
-            headers=headers,
-            params=params,
-            timeout=self.timeout
+            url.format(project=project_id), headers=headers, params=params, timeout=self.timeout
         )
         response.raise_for_status()
         data = response.json()
@@ -333,11 +302,7 @@ class TikTokClient(SocialConnector):
         except (ValueError, TypeError):
             return None
 
-    def fetch_trending(
-        self,
-        market: str = "KR",
-        max_results: int = 50
-    ) -> List[CollectedItem]:
+    def fetch_trending(self, market: str = "KR", max_results: int = 50) -> List[CollectedItem]:
         """
         Fetch trending videos for a market.
 
@@ -348,17 +313,10 @@ class TikTokClient(SocialConnector):
         Returns:
             List of CollectedItem objects
         """
-        return self.fetch_posts(
-            query="trending",
-            max_results=max_results,
-            market=market
-        )
+        return self.fetch_posts(query="trending", max_results=max_results, market=market)
 
     def fetch_hashtag_videos(
-        self,
-        hashtag: str,
-        max_results: int = 20,
-        market: str = "KR"
+        self, hashtag: str, max_results: int = 20, market: str = "KR"
     ) -> List[CollectedItem]:
         """
         Fetch videos for a specific hashtag.
@@ -371,8 +329,4 @@ class TikTokClient(SocialConnector):
         Returns:
             List of CollectedItem objects
         """
-        return self.fetch_posts(
-            query=f"#{hashtag}",
-            max_results=max_results,
-            market=market
-        )
+        return self.fetch_posts(query=f"#{hashtag}", max_results=max_results, market=market)

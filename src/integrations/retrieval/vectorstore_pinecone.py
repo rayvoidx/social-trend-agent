@@ -29,7 +29,7 @@ class PineconeVectorStore:
         index_name: str,
         dimension: int = 3072,  # text-embedding-3-large dimension
         metric: str = "cosine",
-        namespace: str = ""
+        namespace: str = "",
     ):
         """
         Initialize Pinecone vector store.
@@ -63,10 +63,7 @@ class PineconeVectorStore:
                 name=index_name,
                 dimension=dimension,
                 metric=metric,
-                spec=ServerlessSpec(
-                    cloud="aws",
-                    region="us-east-1"
-                )
+                spec=ServerlessSpec(cloud="aws", region="us-east-1"),
             )
 
         self.index = self.pc.Index(index_name)
@@ -76,7 +73,7 @@ class PineconeVectorStore:
         self,
         ids: List[str],
         vectors: List[List[float]],
-        metadatas: Optional[List[Dict[str, Any]]] = None
+        metadatas: Optional[List[Dict[str, Any]]] = None,
     ) -> int:
         """
         Upsert vectors into the index.
@@ -103,18 +100,14 @@ class PineconeVectorStore:
                 elif isinstance(v, list) and all(isinstance(x, str) for x in v):
                     clean_meta[k] = v
 
-            records.append({
-                "id": id_,
-                "values": vec,
-                "metadata": clean_meta
-            })
+            records.append({"id": id_, "values": vec, "metadata": clean_meta})
 
         # Upsert in batches
         batch_size = 100
         total_upserted = 0
 
         for i in range(0, len(records), batch_size):
-            batch = records[i:i + batch_size]
+            batch = records[i : i + batch_size]
             self.index.upsert(vectors=batch, namespace=self.namespace)
             total_upserted += len(batch)
 
@@ -126,7 +119,7 @@ class PineconeVectorStore:
         vector: List[float],
         top_k: int = 10,
         filter: Optional[Dict[str, Any]] = None,
-        include_metadata: bool = True
+        include_metadata: bool = True,
     ) -> List[Dict[str, Any]]:
         """
         Query the index for similar vectors.
@@ -145,16 +138,18 @@ class PineconeVectorStore:
             top_k=top_k,
             filter=filter,
             include_metadata=include_metadata,
-            namespace=self.namespace
+            namespace=self.namespace,
         )
 
         matches = []
         for match in results.matches:
-            matches.append({
-                "id": match.id,
-                "score": match.score,
-                "metadata": match.metadata if include_metadata else {}
-            })
+            matches.append(
+                {
+                    "id": match.id,
+                    "score": match.score,
+                    "metadata": match.metadata if include_metadata else {},
+                }
+            )
 
         return matches
 
@@ -183,9 +178,7 @@ PineconeStore = PineconeVectorStore
 
 
 def get_pinecone_store(
-    index_name: str,
-    dimension: int = 3072,
-    namespace: str = ""
+    index_name: str, dimension: int = 3072, namespace: str = ""
 ) -> PineconeVectorStore:
     """
     Get or create a Pinecone vector store.
@@ -198,11 +191,7 @@ def get_pinecone_store(
     Returns:
         PineconeVectorStore instance
     """
-    return PineconeVectorStore(
-        index_name=index_name,
-        dimension=dimension,
-        namespace=namespace
-    )
+    return PineconeVectorStore(index_name=index_name, dimension=dimension, namespace=namespace)
 
 
 def generate_vector_id(content: str, prefix: str = "") -> str:

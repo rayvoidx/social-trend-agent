@@ -265,11 +265,18 @@ def get_system_prompt() -> str:
     return SYSTEM_PROMPT
 
 
-def get_summarize_prompt(query: str, market: str, platforms: list, time_window: str,
-                         spike_count: int, avg_growth_rate: float, top_videos: str) -> str:
+def get_summarize_prompt(
+    query: str,
+    market: str,
+    platforms: list,
+    time_window: str,
+    spike_count: int,
+    avg_growth_rate: float,
+    top_videos: str,
+) -> str:
     """요약 프롬프트 생성"""
     platforms_str = ", ".join(platforms)
-    
+
     return SUMMARIZE_PROMPT_TEMPLATE.format(
         query=query,
         market=market,
@@ -277,7 +284,7 @@ def get_summarize_prompt(query: str, market: str, platforms: list, time_window: 
         time_window=time_window,
         spike_count=spike_count,
         avg_growth_rate=avg_growth_rate,
-        top_videos=top_videos
+        top_videos=top_videos,
     )
 
 
@@ -289,4 +296,3 @@ def get_analyze_prompt(video_items: str) -> str:
 def get_few_shot_example() -> str:
     """Few-Shot 예제 반환"""
     return FEW_SHOT_EXAMPLE
-

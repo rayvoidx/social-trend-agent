@@ -23,7 +23,9 @@ class HardTimeoutError(TimeoutError):
     pass
 
 
-def _run_in_process(func: Callable[..., Any], args: Tuple[Any, ...], kwargs: Dict[str, Any], timeout_s: float) -> Any:
+def _run_in_process(
+    func: Callable[..., Any], args: Tuple[Any, ...], kwargs: Dict[str, Any], timeout_s: float
+) -> Any:
     ctx = mp.get_context("spawn")
     q: "mp.Queue" = ctx.Queue()
 
@@ -50,7 +52,9 @@ def _run_in_process(func: Callable[..., Any], args: Tuple[Any, ...], kwargs: Dic
     raise RuntimeError(f"Child process error: {payload}")
 
 
-def _run_in_thread(func: Callable[..., Any], args: Tuple[Any, ...], kwargs: Dict[str, Any], timeout_s: float) -> Any:
+def _run_in_thread(
+    func: Callable[..., Any], args: Tuple[Any, ...], kwargs: Dict[str, Any], timeout_s: float
+) -> Any:
     with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
         fut = ex.submit(func, *args, **kwargs)
         return fut.result(timeout=timeout_s)
@@ -85,5 +89,3 @@ def run_with_timeout(
             return _run_in_thread(func, args, kwargs, timeout_s=timeout_s)
 
     return _run_in_thread(func, args, kwargs, timeout_s=timeout_s)
-
-

@@ -4,6 +4,7 @@
 Pydantic 모델을 사용하여 LLM 출력을 검증하고,
 Self-Refine 패턴으로 품질을 향상시킵니다.
 """
+
 from __future__ import annotations
 
 import json
@@ -21,6 +22,7 @@ logger = logging.getLogger(__name__)
 # =============================================================================
 # Output Schemas
 # =============================================================================
+
 
 class SentimentType(str, Enum):
     POSITIVE = "positive"
@@ -48,6 +50,7 @@ class Timeline(str, Enum):
 
 class SentimentDriver(BaseModel):
     """감성 드라이버 스키마."""
+
     topic: str = Field(..., description="주제")
     sentiment: SentimentType = Field(..., description="감성")
     reason: str = Field(..., description="이유")
@@ -55,6 +58,7 @@ class SentimentDriver(BaseModel):
 
 class SentimentAnalysis(BaseModel):
     """감성 분석 출력 스키마."""
+
     overall: SentimentType = Field(..., description="전체 감성")
     positive_pct: float = Field(..., ge=0, le=100, description="긍정 비율")
     neutral_pct: float = Field(..., ge=0, le=100, description="중립 비율")
@@ -64,13 +68,14 @@ class SentimentAnalysis(BaseModel):
     sentiment_drivers: List[SentimentDriver] = Field(default_factory=list)
     summary: str = Field(..., description="요약")
 
-    @validator('positive_pct', 'neutral_pct', 'negative_pct')
+    @validator("positive_pct", "neutral_pct", "negative_pct")
     def validate_percentage(cls, v):
         return round(v, 1)
 
 
 class Keyword(BaseModel):
     """키워드 스키마."""
+
     keyword: str = Field(..., description="키워드")
     score: float = Field(..., ge=0, le=1, description="관련성 점수")
     category: str = Field(default="general", description="카테고리")
@@ -79,11 +84,13 @@ class Keyword(BaseModel):
 
 class KeywordExtraction(BaseModel):
     """키워드 추출 출력 스키마."""
+
     keywords: List[Keyword] = Field(..., description="키워드 리스트")
 
 
 class Topic(BaseModel):
     """토픽 스키마."""
+
     topic: str = Field(..., description="토픽 이름")
     description: str = Field(..., description="토픽 설명")
     keywords: List[str] = Field(default_factory=list, description="관련 키워드")
@@ -94,11 +101,13 @@ class Topic(BaseModel):
 
 class TopicClustering(BaseModel):
     """토픽 클러스터링 출력 스키마."""
+
     topics: List[Topic] = Field(..., description="토픽 리스트")
 
 
 class Insight(BaseModel):
     """인사이트 스키마."""
+
     title: str = Field(..., description="인사이트 제목")
     description: str = Field(..., description="상세 설명")
     evidence: str = Field(..., description="근거")
@@ -107,6 +116,7 @@ class Insight(BaseModel):
 
 class Recommendation(BaseModel):
     """권고사항 스키마."""
+
     action: str = Field(..., description="실행 항목")
     rationale: str = Field(..., description="근거")
     priority: Priority = Field(..., description="우선순위")
@@ -115,6 +125,7 @@ class Recommendation(BaseModel):
 
 class InsightGeneration(BaseModel):
     """인사이트 생성 출력 스키마."""
+
     summary: str = Field(..., description="요약")
     key_findings: List[str] = Field(..., description="핵심 발견사항")
     insights: List[Insight] = Field(..., description="인사이트")
@@ -125,6 +136,7 @@ class InsightGeneration(BaseModel):
 
 class MissionDraft(BaseModel):
     """미션 초안 스키마."""
+
     title: str = Field(..., description="미션 제목")
     objective: str = Field(..., description="목표")
     target_audience: str = Field(..., description="타겟 오디언스")
@@ -138,8 +150,10 @@ class MissionDraft(BaseModel):
 # Self-Refine Implementation
 # =============================================================================
 
+
 class QualityScore(BaseModel):
     """품질 평가 점수."""
+
     specificity: int = Field(..., ge=0, le=10, description="구체성")
     actionability: int = Field(..., ge=0, le=10, description="실행가능성")
     evidence_based: int = Field(..., ge=0, le=10, description="근거기반")
@@ -148,12 +162,18 @@ class QualityScore(BaseModel):
 
     @property
     def total(self) -> float:
-        return (self.specificity + self.actionability +
-                self.evidence_based + self.clarity + self.completeness) / 5
+        return (
+            self.specificity
+            + self.actionability
+            + self.evidence_based
+            + self.clarity
+            + self.completeness
+        ) / 5
 
 
 class QualityEvaluation(BaseModel):
     """품질 평가 결과."""
+
     scores: QualityScore
     improvements_needed: List[str] = Field(default_factory=list)
     overall_quality: str = Field(..., description="excellent|good|needs_improvement")
@@ -164,7 +184,7 @@ def self_refine_output(
     output_schema: type[BaseModel],
     context: str,
     language: str = "ko",
-    max_iterations: int = 2
+    max_iterations: int = 2,
 ) -> Dict[str, Any]:
     """
     Self-Refine 루프로 출력 품질 개선.
@@ -202,10 +222,7 @@ def self_refine_output(
 
         # Step 3: Refine based on feedback
         current_output = _refine_output(
-            current_output,
-            evaluation.improvements_needed,
-            output_schema,
-            language
+            current_output, evaluation.improvements_needed, output_schema, language
         )
 
     # Validate against schema
@@ -217,10 +234,7 @@ def self_refine_output(
         return current_output
 
 
-def _evaluate_output_quality(
-    output: Dict[str, Any],
-    context: str
-) -> QualityEvaluation:
+def _evaluate_output_quality(output: Dict[str, Any], context: str) -> QualityEvaluation:
     """출력 품질 평가."""
     client = get_llm_client()
 
@@ -253,7 +267,7 @@ Score 8+ for excellent, 6-7 for good, below 6 needs improvement."""
         response = client.chat_json(
             messages=[
                 {"role": "system", "content": "You are a quality assurance expert."},
-                {"role": "user", "content": eval_prompt}
+                {"role": "user", "content": eval_prompt},
             ],
             temperature=0.2,
         )
@@ -264,19 +278,15 @@ Score 8+ for excellent, 6-7 for good, below 6 needs improvement."""
         logger.error(f"Quality evaluation failed: {e}")
         return QualityEvaluation(
             scores=QualityScore(
-                specificity=7, actionability=7,
-                evidence_based=7, clarity=7, completeness=7
+                specificity=7, actionability=7, evidence_based=7, clarity=7, completeness=7
             ),
             improvements_needed=[],
-            overall_quality="good"
+            overall_quality="good",
         )
 
 
 def _refine_output(
-    output: Dict[str, Any],
-    improvements: List[str],
-    schema: type[BaseModel],
-    language: str
+    output: Dict[str, Any], improvements: List[str], schema: type[BaseModel], language: str
 ) -> Dict[str, Any]:
     """개선 피드백 기반 출력 수정."""
     client = get_llm_client()
@@ -302,7 +312,7 @@ Provide the improved output as valid JSON."""
         refined = client.chat_json(
             messages=[
                 {"role": "system", "content": "You are improving output quality."},
-                {"role": "user", "content": refine_prompt}
+                {"role": "user", "content": refine_prompt},
             ],
             temperature=0.3,
         )
@@ -319,11 +329,8 @@ Provide the improved output as valid JSON."""
 # Structured Analysis Functions
 # =============================================================================
 
-def analyze_with_schema(
-    texts: List[str],
-    query: str,
-    language: str = "ko"
-) -> Dict[str, Any]:
+
+def analyze_with_schema(texts: List[str], query: str, language: str = "ko") -> Dict[str, Any]:
     """
     구조화된 스키마로 종합 분석.
 
@@ -360,8 +367,11 @@ Provide comprehensive analysis in this JSON format:
     try:
         response = client.chat_json(
             messages=[
-                {"role": "system", "content": "You are an expert analyst providing structured analysis."},
-                {"role": "user", "content": prompt}
+                {
+                    "role": "system",
+                    "content": "You are an expert analyst providing structured analysis.",
+                },
+                {"role": "user", "content": prompt},
             ],
             temperature=0.4,
         )
@@ -369,11 +379,7 @@ Provide comprehensive analysis in this JSON format:
         # Refine each section
         if "sentiment" in response:
             response["sentiment"] = self_refine_output(
-                response["sentiment"],
-                SentimentAnalysis,
-                query,
-                language,
-                max_iterations=1
+                response["sentiment"], SentimentAnalysis, query, language, max_iterations=1
             )
 
         return response
@@ -383,10 +389,7 @@ Provide comprehensive analysis in this JSON format:
         return {}
 
 
-def generate_mission_draft(
-    insight: Dict[str, Any],
-    language: str = "ko"
-) -> Dict[str, Any]:
+def generate_mission_draft(insight: Dict[str, Any], language: str = "ko") -> Dict[str, Any]:
     """
     인사이트에서 미션 초안 생성.
 
@@ -414,18 +417,18 @@ Focus on actionable, measurable objectives."""
     try:
         response = client.chat_json(
             messages=[
-                {"role": "system", "content": "You are a marketing strategist creating campaign missions."},
-                {"role": "user", "content": prompt}
+                {
+                    "role": "system",
+                    "content": "You are a marketing strategist creating campaign missions.",
+                },
+                {"role": "user", "content": prompt},
             ],
             temperature=0.5,
         )
 
         # Refine
         refined = self_refine_output(
-            response,
-            MissionDraft,
-            f"Mission for insight: {insight.get('summary', '')}",
-            language
+            response, MissionDraft, f"Mission for insight: {insight.get('summary', '')}", language
         )
 
         return refined

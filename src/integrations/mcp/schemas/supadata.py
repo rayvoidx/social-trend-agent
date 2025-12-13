@@ -51,5 +51,3 @@ class SupadataToolResponse(BaseModel):
     results: Optional[List[Dict[str, Any]]] = None
 
     raw: Dict[str, Any] = Field(default_factory=dict, description="원본 응답 전체(디버깅용)")
-
-

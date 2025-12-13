@@ -6,6 +6,7 @@ Supports:
 - Full-archive search (Academic/Enterprise access)
 - Filtered stream (Real-time)
 """
+
 from __future__ import annotations
 
 import logging
@@ -57,7 +58,7 @@ class XClient(SocialConnector):
         language: Optional[str] = None,
         exclude_retweets: bool = True,
         include_media: bool = False,
-        **kwargs
+        **kwargs,
     ) -> List[CollectedItem]:
         """
         Fetch tweets matching the query.
@@ -82,18 +83,14 @@ class XClient(SocialConnector):
             return self._generate_sample_data("x", query, max_results)
 
         # Build query with filters
-        full_query = self._build_query(
-            query, language, exclude_retweets, include_media
-        )
+        full_query = self._build_query(query, language, exclude_retweets, include_media)
 
         # Calculate start time
         start_time = self._calculate_start_time(time_window)
 
         try:
             tweets = self._search_recent(
-                full_query,
-                max_results=min(max_results, 100),
-                start_time=start_time
+                full_query, max_results=min(max_results, 100), start_time=start_time
             )
             return tweets
         except Exception as e:
@@ -101,11 +98,7 @@ class XClient(SocialConnector):
             return self._generate_sample_data("x", query, max_results)
 
     def _build_query(
-        self,
-        query: str,
-        language: Optional[str],
-        exclude_retweets: bool,
-        include_media: bool
+        self, query: str, language: Optional[str], exclude_retweets: bool, include_media: bool
     ) -> str:
         """Build Twitter search query with operators."""
         parts = [query]
@@ -140,12 +133,7 @@ class XClient(SocialConnector):
 
         return start.strftime("%Y-%m-%dT%H:%M:%SZ")
 
-    def _search_recent(
-        self,
-        query: str,
-        max_results: int,
-        start_time: str
-    ) -> List[CollectedItem]:
+    def _search_recent(self, query: str, max_results: int, start_time: str) -> List[CollectedItem]:
         """Execute recent search API call."""
         url = f"{self.BASE_URL}/tweets/search/recent"
 
@@ -161,17 +149,14 @@ class XClient(SocialConnector):
         self._wait_for_rate_limit()
 
         response = requests.get(
-            url,
-            headers=self._get_headers(),
-            params=params,
-            timeout=self.timeout
+            url, headers=self._get_headers(), params=params, timeout=self.timeout
         )
 
         # Update rate limit info
         if "x-rate-limit-remaining" in response.headers:
             self._update_rate_limit(
                 int(response.headers["x-rate-limit-remaining"]),
-                int(response.headers.get("x-rate-limit-reset", 0))
+                int(response.headers.get("x-rate-limit-reset", 0)),
             )
 
         response.raise_for_status()
@@ -192,12 +177,8 @@ class XClient(SocialConnector):
             entities = tweet.get("entities", {})
 
             # Extract hashtags and mentions
-            hashtags = [
-                tag["tag"] for tag in entities.get("hashtags", [])
-            ]
-            mentions = [
-                mention["username"] for mention in entities.get("mentions", [])
-            ]
+            hashtags = [tag["tag"] for tag in entities.get("hashtags", [])]
+            mentions = [mention["username"] for mention in entities.get("mentions", [])]
 
             # Parse created_at
             created_at = tweet.get("created_at", "")
@@ -244,11 +225,7 @@ class XClient(SocialConnector):
                 logger.warning(f"Failed to parse Twitter date: {date_str}")
                 return None
 
-    def fetch_user_timeline(
-        self,
-        user_id: str,
-        max_results: int = 20
-    ) -> List[CollectedItem]:
+    def fetch_user_timeline(self, user_id: str, max_results: int = 20) -> List[CollectedItem]:
         """
         Fetch tweets from a specific user's timeline.
 
@@ -271,10 +248,7 @@ class XClient(SocialConnector):
 
         try:
             response = requests.get(
-                url,
-                headers=self._get_headers(),
-                params=params,
-                timeout=self.timeout
+                url, headers=self._get_headers(), params=params, timeout=self.timeout
             )
             response.raise_for_status()
             data = response.json()
@@ -287,9 +261,7 @@ class XClient(SocialConnector):
                         title=tweet.get("text", "")[:80],
                         url=f"https://x.com/i/web/status/{tweet['id']}",
                         content=tweet.get("text", ""),
-                        published_at=self._parse_twitter_date(
-                            tweet.get("created_at", "")
-                        ),
+                        published_at=self._parse_twitter_date(tweet.get("created_at", "")),
                         author_id=user_id,
                         media_type="text",
                     )
@@ -302,11 +274,7 @@ class XClient(SocialConnector):
             return []
 
     def search_full_archive(
-        self,
-        query: str,
-        start_time: str,
-        end_time: str,
-        max_results: int = 100
+        self, query: str, start_time: str, end_time: str, max_results: int = 100
     ) -> List[CollectedItem]:
         """
         Search full archive (Academic/Enterprise access only).
@@ -339,7 +307,7 @@ class XClient(SocialConnector):
                 url,
                 headers=self._get_headers(use_academic=True),
                 params=params,
-                timeout=self.timeout
+                timeout=self.timeout,
             )
             response.raise_for_status()
             data = response.json()
@@ -352,9 +320,7 @@ class XClient(SocialConnector):
                         title=tweet.get("text", "")[:80],
                         url=f"https://x.com/i/web/status/{tweet['id']}",
                         content=tweet.get("text", ""),
-                        published_at=self._parse_twitter_date(
-                            tweet.get("created_at", "")
-                        ),
+                        published_at=self._parse_twitter_date(tweet.get("created_at", "")),
                         language=tweet.get("lang", ""),
                         media_type="text",
                     )

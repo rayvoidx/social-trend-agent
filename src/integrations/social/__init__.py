@@ -1,6 +1,7 @@
 """
 Social media API connectors.
 """
+
 from .base import SocialConnector, CollectedItem
 from .x_client import XClient
 from .instagram_client import InstagramClient

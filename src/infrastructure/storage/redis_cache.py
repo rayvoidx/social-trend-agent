@@ -7,6 +7,7 @@ Redis 캐시 및 저장소
 - Job 상태 관리
 - 실시간 데이터 버퍼
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -109,6 +110,7 @@ class RedisCache:
 
         # Fallback to memory
         import time
+
         if full_key in self._memory_cache:
             if self._memory_expiry.get(full_key, 0) > time.time():
                 return self._memory_cache[full_key]
@@ -118,12 +120,7 @@ class RedisCache:
 
         return None
 
-    def set(
-        self,
-        key: str,
-        value: Any,
-        ttl: Optional[int] = None
-    ) -> bool:
+    def set(self, key: str, value: Any, ttl: Optional[int] = None) -> bool:
         """
         캐시에 값 저장.
 
@@ -148,6 +145,7 @@ class RedisCache:
 
         # Fallback to memory
         import time
+
         self._memory_cache[full_key] = value
         self._memory_expiry[full_key] = time.time() + ttl
         return True
@@ -195,12 +193,7 @@ class RedisCache:
 
         return self._memory_cache.get(full_key)
 
-    def set_json(
-        self,
-        key: str,
-        value: Dict[str, Any],
-        ttl: Optional[int] = None
-    ) -> bool:
+    def set_json(self, key: str, value: Dict[str, Any], ttl: Optional[int] = None) -> bool:
         """JSON 형식으로 값 저장."""
         full_key = self._make_key(key)
         ttl = ttl or self.default_ttl
@@ -233,11 +226,7 @@ class RedisCache:
         key = f"dedup:{content_hash}"
         return self.exists(key)
 
-    def mark_as_seen(
-        self,
-        content_hash: str,
-        ttl: Optional[int] = None
-    ):
+    def mark_as_seen(self, content_hash: str, ttl: Optional[int] = None):
         """
         콘텐츠를 처리됨으로 표시.
 
@@ -258,12 +247,7 @@ class RedisCache:
     # Job State Management
     # =========================================================================
 
-    def set_job_state(
-        self,
-        job_id: str,
-        state: str,
-        metadata: Optional[Dict[str, Any]] = None
-    ):
+    def set_job_state(self, job_id: str, state: str, metadata: Optional[Dict[str, Any]] = None):
         """
         Job 상태 저장.
 
@@ -289,12 +273,7 @@ class RedisCache:
     # List Operations (for buffering)
     # =========================================================================
 
-    def push_to_list(
-        self,
-        key: str,
-        value: Any,
-        max_size: int = 1000
-    ):
+    def push_to_list(self, key: str, value: Any, max_size: int = 1000):
         """
         리스트에 값 추가 (FIFO 버퍼).
 
@@ -320,12 +299,7 @@ class RedisCache:
         self._memory_cache[full_key].insert(0, value)
         self._memory_cache[full_key] = self._memory_cache[full_key][:max_size]
 
-    def get_list(
-        self,
-        key: str,
-        start: int = 0,
-        end: int = -1
-    ) -> List[Any]:
+    def get_list(self, key: str, start: int = 0, end: int = -1) -> List[Any]:
         """리스트 조회."""
         full_key = self._make_key(f"list:{key}")
 
@@ -340,7 +314,7 @@ class RedisCache:
         items = self._memory_cache.get(full_key, [])
         if end == -1:
             return items[start:]
-        return items[start:end + 1]
+        return items[start : end + 1]
 
     # =========================================================================
     # Set Operations (for unique collections)
@@ -443,10 +417,7 @@ class RedisCache:
                 logger.error(f"Redis clear_prefix error: {e}")
 
         # Fallback
-        to_delete = [
-            k for k in self._memory_cache.keys()
-            if k.startswith(full_pattern)
-        ]
+        to_delete = [k for k in self._memory_cache.keys() if k.startswith(full_pattern)]
         for k in to_delete:
             del self._memory_cache[k]
 

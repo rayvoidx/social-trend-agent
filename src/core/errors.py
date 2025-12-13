@@ -1,6 +1,7 @@
 """
 우아한 실패 처리를 위한 에러 핸들링 유틸리티
 """
+
 from typing import Dict, Any, Optional, List
 from datetime import datetime
 from enum import Enum
@@ -10,6 +11,7 @@ import random
 
 class CompletionStatus(Enum):
     """에이전트 작업의 완료 상태"""
+
     FULL = "full"
     PARTIAL = "partial"
     FAILED = "failed"
@@ -30,7 +32,7 @@ class PartialResult:
         failed_operations: Optional[List[str]] = None,
         errors: Optional[List[Dict[str, Any]]] = None,
         warnings: Optional[List[str]] = None,
-        limitations: Optional[List[str]] = None
+        limitations: Optional[List[str]] = None,
     ):
         """
         Args:
@@ -61,7 +63,7 @@ class PartialResult:
             "errors": self.errors,
             "warnings": self.warnings,
             "limitations": self.limitations,
-            "timestamp": self.timestamp
+            "timestamp": self.timestamp,
         }
 
     def add_warning(self, warning: str):
@@ -85,7 +87,7 @@ class PartialResult:
             "operation": operation,
             "error_type": type(error).__name__,
             "error_message": str(error),
-            "context": context or {}
+            "context": context or {},
         }
         self.errors.append(error_detail)
 
@@ -115,7 +117,9 @@ class PartialResult:
 
         if self.status == CompletionStatus.PARTIAL:
             lines.append("⚠️ **부분 완료 알림 (Partial Completion Notice)**\n")
-            lines.append("일부 데이터 수집/분석 작업이 실패했습니다. 아래 결과는 제한적일 수 있습니다.\n")
+            lines.append(
+                "일부 데이터 수집/분석 작업이 실패했습니다. 아래 결과는 제한적일 수 있습니다.\n"
+            )
 
         elif self.status == CompletionStatus.FAILED:
             lines.append("❌ **작업 실패 알림 (Operation Failed)**\n")
@@ -140,7 +144,9 @@ class PartialResult:
         if self.errors:
             lines.append("\n**오류 상세 (Error Details)**:\n")
             for error in self.errors:
-                lines.append(f"- **{error['operation']}**: {error['error_type']} - {error['error_message']}\n")
+                lines.append(
+                    f"- **{error['operation']}**: {error['error_type']} - {error['error_message']}\n"
+                )
 
         lines.append("\n---\n")
 
@@ -164,7 +170,7 @@ def create_partial_result(
     data: Any,
     successful_ops: List[str],
     failed_ops: List[str],
-    limitations: Optional[List[str]] = None
+    limitations: Optional[List[str]] = None,
 ) -> PartialResult:
     """
     부분 결과 생성
@@ -183,7 +189,7 @@ def create_partial_result(
         data=data,
         successful_operations=successful_ops,
         failed_operations=failed_ops,
-        limitations=limitations
+        limitations=limitations,
     )
     return result
 
@@ -198,11 +204,7 @@ def create_failed_result(errors: List[Dict[str, Any]]) -> PartialResult:
     Returns:
         FAILED 상태의 PartialResult
     """
-    return PartialResult(
-        status=CompletionStatus.FAILED,
-        data=None,
-        errors=errors
-    )
+    return PartialResult(status=CompletionStatus.FAILED, data=None, errors=errors)
 
 
 def safe_api_call(
@@ -214,7 +216,7 @@ def safe_api_call(
     retry_policy: Optional[Dict[str, Any]] = None,
     timeout_seconds: Optional[int] = None,
     raise_on_fail: bool = False,
-    **kwargs
+    **kwargs,
 ):
     """
     에러 핸들링을 통한 안전한 API 호출
@@ -253,6 +255,7 @@ def safe_api_call(
             # If a hard timeout is provided, run the call in a thread and wait.
             if isinstance(timeout_seconds, int) and timeout_seconds > 0:
                 import concurrent.futures
+
                 with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
                     fut = ex.submit(api_func, *args, **kwargs)
                     result = fut.result(timeout=float(timeout_seconds))
@@ -264,7 +267,7 @@ def safe_api_call(
         except Exception as e:
             last_exc = e
             if attempt < max_retries:
-                sleep_s = backoff_seconds * (2 ** attempt)
+                sleep_s = backoff_seconds * (2**attempt)
                 if jitter and sleep_s > 0:
                     sleep_s = sleep_s + random.uniform(0.0, min(1.0, sleep_s))
                 if sleep_s > 0:
@@ -272,11 +275,15 @@ def safe_api_call(
                 continue
 
     if last_exc is not None and result_container:
-        result_container.add_error(operation_name, last_exc, context={
-            "args": str(args)[:100],
-            "kwargs": str(kwargs)[:100],
-            "retry_policy": rp,
-        })
+        result_container.add_error(
+            operation_name,
+            last_exc,
+            context={
+                "args": str(args)[:100],
+                "kwargs": str(kwargs)[:100],
+                "retry_policy": rp,
+            },
+        )
         result_container.add_limitation(
             f"{operation_name} 실패로 인해 데이터가 불완전할 수 있습니다."
         )
@@ -320,10 +327,7 @@ if __name__ == "__main__":
         raise ConnectionError("Connection failed")
 
     data = safe_api_call(
-        "external_api",
-        flaky_api,
-        fallback_value={"items": []},
-        result_container=result_container
+        "external_api", flaky_api, fallback_value={"items": []}, result_container=result_container
     )
 
     print("\nSafe API call result:", data)

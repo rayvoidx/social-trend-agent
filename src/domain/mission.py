@@ -191,7 +191,10 @@ def recommend_creators_for_mission(
     def score_creator(c: Creator) -> int:
         score = 0
         # 플랫폼 매칭 가중치
-        if any(p in mission.platforms for p in c.platforms) or c.primary_platform in mission.platforms:
+        if (
+            any(p in mission.platforms for p in c.platforms)
+            or c.primary_platform in mission.platforms
+        ):
             score += 100
         # 팔로워 / 조회수 / 참여율
         score += int((c.followers or 0) / 10_000)
@@ -201,5 +204,3 @@ def recommend_creators_for_mission(
 
     scored = sorted(all_creators, key=score_creator, reverse=True)
     return list(scored)[:limit]
-
-

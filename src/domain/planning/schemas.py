@@ -14,13 +14,15 @@ class AgentPlan(BaseModel):
 
     intent: str = Field(..., description="User intent interpreted from the query.")
     key_questions: List[str] = Field(default_factory=list, description="Key questions to answer.")
-    assumptions: List[str] = Field(default_factory=list, description="Explicit assumptions/constraints.")
+    assumptions: List[str] = Field(
+        default_factory=list, description="Explicit assumptions/constraints."
+    )
     tool_strategy: List[str] = Field(
         default_factory=list,
         description="What tools/data sources to use and why (high-level).",
     )
     output_outline: List[str] = Field(default_factory=list, description="Outline for final report.")
-    risk_flags: List[str] = Field(default_factory=list, description="Potential risks: hallucination, bias, data gaps.")
+    risk_flags: List[str] = Field(
+        default_factory=list, description="Potential risks: hallucination, bias, data gaps."
+    )
     language: Optional[str] = Field(None, description="Preferred response language.")
-
-

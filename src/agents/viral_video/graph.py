@@ -1,6 +1,7 @@
 """
 LangGraph definition for Viral Video Agent
 """
+
 import os
 import uuid
 from datetime import datetime
@@ -16,7 +17,7 @@ from src.agents.viral_video.tools import (
     fetch_video_stats,
     detect_spike,
     topic_cluster,
-    generate_success_factors
+    generate_success_factors,
 )
 from src.core.gateway import route_request
 from src.core.planning.plan import (
@@ -40,11 +41,21 @@ def collect_node(state: ViralAgentState) -> Dict[str, Any]:
     logger.info("Collecting video stats", market=state.market, platforms=state.platforms)
 
     steps = state.plan.get("steps") if isinstance(state.plan, dict) else []
-    current_step_id = (state.plan_execution or {}).get("current_step_id") if isinstance(state.plan_execution, dict) else None
-    rp = get_retry_policy_for_step(steps, current_step_id) or get_retry_policy_for_op(steps, "collect")
+    current_step_id = (
+        (state.plan_execution or {}).get("current_step_id")
+        if isinstance(state.plan_execution, dict)
+        else None
+    )
+    rp = get_retry_policy_for_step(steps, current_step_id) or get_retry_policy_for_op(
+        steps, "collect"
+    )
     timeout_s = get_timeout_for_step(steps, current_step_id) or get_timeout_for_op(steps, "collect")
     cb = get_circuit_breaker_for_step(steps, current_step_id)
-    strict = isinstance(cb, dict) and isinstance(cb.get("failure_threshold"), int) and cb.get("failure_threshold", 0) > 0
+    strict = (
+        isinstance(cb, dict)
+        and isinstance(cb.get("failure_threshold"), int)
+        and cb.get("failure_threshold", 0) > 0
+    )
 
     raw_items = []
 
@@ -62,7 +73,9 @@ def collect_node(state: ViralAgentState) -> Dict[str, Any]:
         )
         if isinstance(stats, list):
             raw_items.extend(stats)
-        logger.info(f"Collected {len(stats) if isinstance(stats, list) else 0} items from {platform}")
+        logger.info(
+            f"Collected {len(stats) if isinstance(stats, list) else 0} items from {platform}"
+        )
 
     logger.node_end("collect", output_size=len(raw_items))
     return {"raw_items": raw_items}
@@ -100,6 +113,7 @@ def router_node(state: ViralAgentState) -> Dict[str, Any]:
         "plan": {"steps": normalize_steps(agent_entry) if agent_entry else []},
     }
 
+
 def normalize_node(state: ViralAgentState) -> Dict[str, Any]:
     """Normalize and clean collected data"""
     run_id = state.run_id or "unknown"
@@ -108,18 +122,20 @@ def normalize_node(state: ViralAgentState) -> Dict[str, Any]:
 
     normalized = []
     for item in state.raw_items:
-        normalized.append({
-            "video_id": item.get("video_id", ""),
-            "title": item.get("title", ""),
-            "channel": item.get("channel", ""),
-            "views": item.get("views", 0),
-            "likes": item.get("likes", 0),
-            "comments": item.get("comments", 0),
-            "published_at": item.get("published_at", ""),
-            "platform": item.get("platform", "youtube"),
-            "url": item.get("url", ""),
-            "thumbnail": item.get("thumbnail", "")
-        })
+        normalized.append(
+            {
+                "video_id": item.get("video_id", ""),
+                "title": item.get("title", ""),
+                "channel": item.get("channel", ""),
+                "views": item.get("views", 0),
+                "likes": item.get("likes", 0),
+                "comments": item.get("comments", 0),
+                "published_at": item.get("published_at", ""),
+                "platform": item.get("platform", "youtube"),
+                "url": item.get("url", ""),
+                "thumbnail": item.get("thumbnail", ""),
+            }
+        )
 
     logger.node_end("normalize", output_size=len(normalized))
     return {"normalized": normalized}
@@ -132,11 +148,21 @@ def analyze_node(state: ViralAgentState) -> Dict[str, Any]:
     logger.node_start("analyze", input_size=len(state.normalized))
 
     steps = state.plan.get("steps") if isinstance(state.plan, dict) else []
-    current_step_id = (state.plan_execution or {}).get("current_step_id") if isinstance(state.plan_execution, dict) else None
-    rp = get_retry_policy_for_step(steps, current_step_id) or get_retry_policy_for_op(steps, "analyze")
+    current_step_id = (
+        (state.plan_execution or {}).get("current_step_id")
+        if isinstance(state.plan_execution, dict)
+        else None
+    )
+    rp = get_retry_policy_for_step(steps, current_step_id) or get_retry_policy_for_op(
+        steps, "analyze"
+    )
     timeout_s = get_timeout_for_step(steps, current_step_id) or get_timeout_for_op(steps, "analyze")
     cb = get_circuit_breaker_for_step(steps, current_step_id)
-    strict = isinstance(cb, dict) and isinstance(cb.get("failure_threshold"), int) and cb.get("failure_threshold", 0) > 0
+    strict = (
+        isinstance(cb, dict)
+        and isinstance(cb.get("failure_threshold"), int)
+        and cb.get("failure_threshold", 0) > 0
+    )
 
     result_container = PartialResult(status=CompletionStatus.FULL)
 
@@ -166,7 +192,7 @@ def analyze_node(state: ViralAgentState) -> Dict[str, Any]:
     analysis = {
         "spikes": spike_results,
         "clusters": cluster_results,
-        "total_items": len(state.normalized)
+        "total_items": len(state.normalized),
     }
 
     logger.node_end("analyze")
@@ -180,11 +206,23 @@ def summarize_node(state: ViralAgentState) -> Dict[str, Any]:
     logger.node_start("summarize")
 
     steps = state.plan.get("steps") if isinstance(state.plan, dict) else []
-    current_step_id = (state.plan_execution or {}).get("current_step_id") if isinstance(state.plan_execution, dict) else None
-    rp = get_retry_policy_for_step(steps, current_step_id) or get_retry_policy_for_op(steps, "summarize")
-    timeout_s = get_timeout_for_step(steps, current_step_id) or get_timeout_for_op(steps, "summarize")
+    current_step_id = (
+        (state.plan_execution or {}).get("current_step_id")
+        if isinstance(state.plan_execution, dict)
+        else None
+    )
+    rp = get_retry_policy_for_step(steps, current_step_id) or get_retry_policy_for_op(
+        steps, "summarize"
+    )
+    timeout_s = get_timeout_for_step(steps, current_step_id) or get_timeout_for_op(
+        steps, "summarize"
+    )
     cb = get_circuit_breaker_for_step(steps, current_step_id)
-    strict = isinstance(cb, dict) and isinstance(cb.get("failure_threshold"), int) and cb.get("failure_threshold", 0) > 0
+    strict = (
+        isinstance(cb, dict)
+        and isinstance(cb.get("failure_threshold"), int)
+        and cb.get("failure_threshold", 0) > 0
+    )
 
     success_factors = safe_api_call(
         "generate_success_factors",
@@ -233,50 +271,58 @@ def report_node(state: ViralAgentState) -> Dict[str, Any]:
         report_lines.append("")
 
         for i, video in enumerate(spike_videos[:10], 1):
-            report_lines.extend([
-                f"### {i}. {video['title']}",
-                f"**채널**: {video['channel']}",
-                f"**조회수**: {video['views']:,}",
-                f"**좋아요**: {video['likes']:,}",
-                f"**URL**: [{video['platform']}]({video['url']})",
-                f"**Z-Score**: {video.get('z_score', 0):.2f}",
-                f"",
-            ])
+            report_lines.extend(
+                [
+                    f"### {i}. {video['title']}",
+                    f"**채널**: {video['channel']}",
+                    f"**조회수**: {video['views']:,}",
+                    f"**좋아요**: {video['likes']:,}",
+                    f"**URL**: [{video['platform']}]({video['url']})",
+                    f"**Z-Score**: {video.get('z_score', 0):.2f}",
+                    f"",
+                ]
+            )
     else:
         report_lines.append("급상승 영상이 발견되지 않았습니다.")
         report_lines.append("")
 
-    report_lines.extend([
-        f"---",
-        f"",
-        f"## 📊 토픽 클러스터",
-        f"",
-    ])
+    report_lines.extend(
+        [
+            f"---",
+            f"",
+            f"## 📊 토픽 클러스터",
+            f"",
+        ]
+    )
 
     clusters = state.analysis.get("clusters", {}).get("top_clusters", [])
     for i, cluster in enumerate(clusters[:5], 1):
-        report_lines.extend([
-            f"### {i}. {cluster['topic']}",
-            f"**영상 수**: {cluster['count']}개",
-            f"**평균 조회수**: {cluster['avg_views']:,}",
-            f"",
-        ])
+        report_lines.extend(
+            [
+                f"### {i}. {cluster['topic']}",
+                f"**영상 수**: {cluster['count']}개",
+                f"**평균 조회수**: {cluster['avg_views']:,}",
+                f"",
+            ]
+        )
 
-    report_lines.extend([
-        f"---",
-        f"",
-        f"## 💡 성공 요인 분석",
-        f"",
-        state.analysis.get("success_factors", "No success factors available."),
-        f"",
-        f"---",
-        f"",
-        f"**⚠️ 주의**: 본 리포트는 AI가 생성한 분석으로, 사실 확인이 필요합니다.",
-        f"출처 링크를 반드시 확인하세요.",
-        f"",
-        f"**Run ID**: `{state.run_id}`",
-        f""
-    ])
+    report_lines.extend(
+        [
+            f"---",
+            f"",
+            f"## 💡 성공 요인 분석",
+            f"",
+            state.analysis.get("success_factors", "No success factors available."),
+            f"",
+            f"---",
+            f"",
+            f"**⚠️ 주의**: 본 리포트는 AI가 생성한 분석으로, 사실 확인이 필요합니다.",
+            f"출처 링크를 반드시 확인하세요.",
+            f"",
+            f"**Run ID**: `{state.run_id}`",
+            f"",
+        ]
+    )
 
     report_md = "\n".join(report_lines)
 
@@ -284,7 +330,7 @@ def report_node(state: ViralAgentState) -> Dict[str, Any]:
     metrics = {
         "coverage": len(state.normalized) / 100,  # Assume 100 videos target
         "factuality": 1.0 if all(item.get("url") for item in state.normalized) else 0.0,
-        "actionability": 1.0 if state.analysis.get("success_factors") else 0.0
+        "actionability": 1.0 if state.analysis.get("success_factors") else 0.0,
     }
 
     logger.node_end("report", output_size=len(report_md))
@@ -313,7 +359,7 @@ def notify_node(state: ViralAgentState) -> Dict[str, Any]:
                 "analysis": state.analysis,
                 "metrics": state.metrics,
                 "report_url": state.report_md,
-                "timestamp": datetime.now().isoformat()
+                "timestamp": datetime.now().isoformat(),
             }
 
             response = requests.post(n8n_webhook_url, json=payload, timeout=10)
@@ -371,23 +417,24 @@ def notify_node(state: ViralAgentState) -> Dict[str, Any]:
                     else:
                         top_videos.append(f"{i}. {title} - {views:,} views")
 
-                blocks.append({
-                    "type": "section",
-                    "text": {
-                        "type": "mrkdwn",
-                        "text": "*Top Videos:*\n" + "\n".join(top_videos)
+                blocks.append(
+                    {
+                        "type": "section",
+                        "text": {
+                            "type": "mrkdwn",
+                            "text": "*Top Videos:*\n" + "\n".join(top_videos),
+                        },
                     }
-                })
+                )
 
             # Add report link if available
             if state.report_md:
-                blocks.append({
-                    "type": "section",
-                    "text": {
-                        "type": "mrkdwn",
-                        "text": f"*Full Report:*\n`{state.report_md}`"
+                blocks.append(
+                    {
+                        "type": "section",
+                        "text": {"type": "mrkdwn", "text": f"*Full Report:*\n`{state.report_md}`"},
                     }
-                })
+                )
 
             response = requests.post(slack_webhook_url, json=slack_message, timeout=10)
             response.raise_for_status()
@@ -431,8 +478,7 @@ def build_graph(checkpointer: Optional[Any] = None) -> Any:
     graph.add_edge("notify", END)
 
     return graph.compile(
-        checkpointer=checkpointer,
-        interrupt_before=["report"] if checkpointer else None
+        checkpointer=checkpointer, interrupt_before=["report"] if checkpointer else None
     )
 
 
@@ -503,30 +549,30 @@ def run_agent(
     try:
         # 1. Start execution
         current_state = graph.invoke(initial_state, config=config)
-        
+
         # 2. Check for interrupt
         if require_approval:
             snapshot = graph.get_state(config)
             if snapshot.next and "report" in snapshot.next:
                 # CLI Interaction
-                print("\n" + "="*50)
+                print("\n" + "=" * 50)
                 print("✋  APPROVAL REQUIRED")
-                print("="*50)
+                print("=" * 50)
                 print(f"Viral analysis complete for: '{query}'")
                 print("-" * 50)
-                
+
                 while True:
                     choice = input("Proceed to generate report? (y/n): ").strip().lower()
-                    if choice == 'y':
+                    if choice == "y":
                         logger.info("✅ Approved. Resuming...")
                         current_state = graph.invoke(None, config=config)
                         break
-                    elif choice == 'n':
+                    elif choice == "n":
                         logger.info("🛑 Aborted by user.")
                         return ViralAgentState(**cast(Dict[str, Any], current_state))
                     else:
                         print("Please enter 'y' or 'n'.")
-        
+
         # Ensure result is ViralAgentState
         if isinstance(current_state, dict):
             return ViralAgentState(**cast(Dict[str, Any], current_state))

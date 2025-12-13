@@ -15,6 +15,7 @@
 - 12-factor app: https://12factor.net/config
 - Pydantic Settings: https://docs.pydantic.dev/latest/concepts/pydantic_settings/
 """
+
 import os
 import json
 import yaml
@@ -30,6 +31,7 @@ logger = logging.getLogger(__name__)
 
 class Environment(str, Enum):
     """배포 환경"""
+
     DEVELOPMENT = "development"
     STAGING = "staging"
     PRODUCTION = "production"
@@ -38,6 +40,7 @@ class Environment(str, Enum):
 
 class LLMProvider(str, Enum):
     """지원되는 LLM 제공자"""
+
     AZURE_OPENAI = "azure_openai"
     OPENAI = "openai"
     ANTHROPIC = "anthropic"
@@ -49,8 +52,10 @@ class LLMProvider(str, Enum):
 # 설정 모델 (Pydantic을 사용한 검증)
 # ============================================================================
 
+
 class LLMConfig(BaseModel):
     """LLM 설정"""
+
     provider: LLMProvider = Field(default=LLMProvider.AZURE_OPENAI)
     model_name: str = Field(default="gpt-5.2")
     temperature: float = Field(default=0.7, ge=0.0, le=2.0)
@@ -71,6 +76,7 @@ class LLMConfig(BaseModel):
 
 class CacheConfig(BaseModel):
     """캐시 설정"""
+
     enabled: bool = True
     ttl_seconds: int = Field(default=3600, gt=0)
     max_size_mb: int = Field(default=100, gt=0)
@@ -80,6 +86,7 @@ class CacheConfig(BaseModel):
 
 class RetryConfig(BaseModel):
     """재시도 설정"""
+
     max_retries: int = Field(default=3, ge=0)
     backoff_factor: float = Field(default=0.5, ge=0)
     max_backoff: float = Field(default=60.0, ge=0)
@@ -89,6 +96,7 @@ class RetryConfig(BaseModel):
 
 class DataSourceConfig(BaseModel):
     """데이터 소스 설정"""
+
     name: str
     enabled: bool = True
     api_key: Optional[str] = None
@@ -99,6 +107,7 @@ class DataSourceConfig(BaseModel):
 
 class MonitoringConfig(BaseModel):
     """모니터링 및 관측성 설정"""
+
     enabled: bool = True
     log_level: str = "INFO"
     structured_logging: bool = True
@@ -109,6 +118,7 @@ class MonitoringConfig(BaseModel):
 
 class NotificationConfig(BaseModel):
     """알림 설정"""
+
     enabled: bool = False
     slack_webhook: Optional[str] = None
     n8n_webhook: Optional[str] = None
@@ -119,6 +129,7 @@ class NotificationConfig(BaseModel):
 
 class RateLimitConfig(BaseModel):
     """레이트 리미팅 설정"""
+
     enabled: bool = True
     requests_per_minute: int = Field(default=60, gt=0)
     burst_size: int = Field(default=10, gt=0)
@@ -127,6 +138,7 @@ class RateLimitConfig(BaseModel):
 
 class AgentConfig(BaseModel):
     """에이전트별 설정"""
+
     name: str
     enabled: bool = True
     max_concurrent_tasks: int = Field(default=5, gt=0)
@@ -150,6 +162,7 @@ class SystemConfig(BaseSettings):
 
     환경 변수 지원을 위해 Pydantic Settings를 사용합니다.
     """
+
     # Environment
     environment: Environment = Field(default=Environment.DEVELOPMENT)
     debug: bool = False
@@ -194,6 +207,7 @@ class SystemConfig(BaseSettings):
 # 설정 관리자
 # ============================================================================
 
+
 class ConfigManager:
     """
     중앙 집중식 설정 관리자
@@ -219,11 +233,7 @@ class ConfigManager:
         ```
     """
 
-    def __init__(
-        self,
-        config_dir: str = "config",
-        environment: Optional[Environment] = None
-    ):
+    def __init__(self, config_dir: str = "config", environment: Optional[Environment] = None):
         """
         설정 관리자 초기화
 
@@ -294,7 +304,7 @@ class ConfigManager:
         # Return hardcoded defaults
         # Production 환경에서는 샘플 폴백 비활성화
         is_prod = self.environment == Environment.PRODUCTION
-        
+
         return {
             "environment": self.environment.value,
             "debug": False,
@@ -329,7 +339,7 @@ class ConfigManager:
             return [self._expand_env_vars(item) for item in data]
         elif isinstance(data, str):
             # Match ${VAR_NAME:-default} or ${VAR_NAME}
-            pattern = r'\$\{([^}:]+)(?::-([^}]*))?\}'
+            pattern = r"\$\{([^}:]+)(?::-([^}]*))?\}"
 
             def replace_env(match):
                 var_name = match.group(1)
@@ -521,39 +531,32 @@ if __name__ == "__main__":
             "model_name": "gpt-5.2",
             "temperature": 0.7,
             "api_base": os.getenv("OPENAI_API_BASE"),
-            "api_key": os.getenv("OPENAI_API_KEY")
+            "api_key": os.getenv("OPENAI_API_KEY"),
         },
         "data_sources": {
             "newsapi": {
                 "name": "newsapi",
                 "enabled": True,
                 "api_key": os.getenv("NEWS_API_KEY"),
-                "max_results": 20
+                "max_results": 20,
             },
             "naver": {
                 "name": "naver",
                 "enabled": True,
                 "api_key": os.getenv("NAVER_CLIENT_ID"),
-                "max_results": 20
-            }
+                "max_results": 20,
+            },
         },
         "agents": {
             "news_trend_agent": {
                 "name": "news_trend_agent",
                 "enabled": True,
                 "max_concurrent_tasks": 5,
-                "timeout_seconds": 300
+                "timeout_seconds": 300,
             }
         },
-        "monitoring": {
-            "enabled": True,
-            "log_level": "INFO",
-            "metrics_enabled": True
-        },
-        "rate_limit": {
-            "enabled": True,
-            "requests_per_minute": 60
-        }
+        "monitoring": {"enabled": True, "log_level": "INFO", "metrics_enabled": True},
+        "rate_limit": {"enabled": True, "requests_per_minute": 60},
     }
 
     # Save default config

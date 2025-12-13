@@ -6,6 +6,7 @@ Provides:
 - Request logging middleware
 - Rate limiting middleware
 """
+
 from .prometheus_metrics import (
     get_metrics_registry,
     MetricsRegistry,

@@ -11,6 +11,7 @@ from typing import Any, Dict, List, Optional
 
 class QualityLevel(Enum):
     """Quality level classification."""
+
     EXCELLENT = "excellent"
     GOOD = "good"
     FAIR = "fair"
@@ -20,6 +21,7 @@ class QualityLevel(Enum):
 @dataclass
 class EvaluationMetrics:
     """Metrics from agent evaluation."""
+
     relevance: float = 0.0
     completeness: float = 0.0
     accuracy: float = 0.0
@@ -96,7 +98,7 @@ class AgentEvaluator:
             level=level,
             strengths=strengths,
             weaknesses=weaknesses,
-            recommendations=recommendations
+            recommendations=recommendations,
         )
 
     def _score_relevance(self, query: str, report: str, analysis: Dict) -> float:
@@ -157,7 +159,16 @@ class AgentEvaluator:
         score = 0.0
 
         # Check for actionable keywords in report
-        actionable_terms = ["recommend", "suggest", "action", "should", "consider", "권고", "추천", "제안"]
+        actionable_terms = [
+            "recommend",
+            "suggest",
+            "action",
+            "should",
+            "consider",
+            "권고",
+            "추천",
+            "제안",
+        ]
         report_lower = report.lower() if report else ""
 
         for term in actionable_terms:
@@ -170,8 +181,9 @@ class AgentEvaluator:
 
         return min(1.0, score)
 
-    def _identify_strengths(self, relevance: float, completeness: float,
-                           accuracy: float, actionability: float) -> List[str]:
+    def _identify_strengths(
+        self, relevance: float, completeness: float, accuracy: float, actionability: float
+    ) -> List[str]:
         """Identify strengths based on scores."""
         strengths = []
 
@@ -186,8 +198,9 @@ class AgentEvaluator:
 
         return strengths if strengths else ["Basic analysis provided"]
 
-    def _identify_weaknesses(self, relevance: float, completeness: float,
-                            accuracy: float, actionability: float) -> List[str]:
+    def _identify_weaknesses(
+        self, relevance: float, completeness: float, accuracy: float, actionability: float
+    ) -> List[str]:
         """Identify weaknesses based on scores."""
         weaknesses = []
 

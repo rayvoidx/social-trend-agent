@@ -9,7 +9,9 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional
 
 
-def get_agent_entry(orchestrator: Optional[Dict[str, Any]], agent_name: str) -> Optional[Dict[str, Any]]:
+def get_agent_entry(
+    orchestrator: Optional[Dict[str, Any]], agent_name: str
+) -> Optional[Dict[str, Any]]:
     if not isinstance(orchestrator, dict):
         return None
     plan = orchestrator.get("plan")
@@ -62,7 +64,9 @@ def normalize_steps(agent_entry: Optional[Dict[str, Any]]) -> List[Dict[str, Any
     return []
 
 
-def find_step_by_id(steps: List[Dict[str, Any]], step_id: Optional[str]) -> Optional[Dict[str, Any]]:
+def find_step_by_id(
+    steps: List[Dict[str, Any]], step_id: Optional[str]
+) -> Optional[Dict[str, Any]]:
     if not step_id:
         return None
     for s in steps:
@@ -71,7 +75,9 @@ def find_step_by_id(steps: List[Dict[str, Any]], step_id: Optional[str]) -> Opti
     return None
 
 
-def get_retry_policy_for_step(steps: List[Dict[str, Any]], step_id: Optional[str]) -> Dict[str, Any]:
+def get_retry_policy_for_step(
+    steps: List[Dict[str, Any]], step_id: Optional[str]
+) -> Dict[str, Any]:
     s = find_step_by_id(steps, step_id)
     if not isinstance(s, dict):
         return {}
@@ -137,7 +143,9 @@ def get_timeout_for_op(steps: List[Any], op_prefix: str) -> Optional[int]:
     return None
 
 
-def get_circuit_breaker_for_step(steps: List[Dict[str, Any]], step_id: Optional[str]) -> Dict[str, Any]:
+def get_circuit_breaker_for_step(
+    steps: List[Dict[str, Any]], step_id: Optional[str]
+) -> Dict[str, Any]:
     s = find_step_by_id(steps, step_id)
     if not isinstance(s, dict):
         return {}
@@ -240,5 +248,3 @@ def derive_execution_overrides(agent_entry: Optional[Dict[str, Any]]) -> Dict[st
             overrides["rag_top_k"] = rparams["rag_top_k"]
 
     return overrides
-
-

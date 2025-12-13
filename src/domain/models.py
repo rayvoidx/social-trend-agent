@@ -348,9 +348,7 @@ class MissionRepository(InMemoryRepository[Mission]):
     """Mission 전용 인메모리 저장소."""
 
     def list_by_status(self, status: MissionStatus) -> List[Mission]:
-        return [
-            m for m in self._store.values() if isinstance(m, Mission) and m.status == status
-        ]
+        return [m for m in self._store.values() if isinstance(m, Mission) and m.status == status]
 
 
 class CreatorRepository(InMemoryRepository[Creator]):
@@ -370,9 +368,7 @@ class RewardRepository(InMemoryRepository[Reward]):
 
     def list_by_mission(self, mission_id: str) -> List[Reward]:
         return [
-            r
-            for r in self._store.values()
-            if isinstance(r, Reward) and r.mission_id == mission_id
+            r for r in self._store.values() if isinstance(r, Reward) and r.mission_id == mission_id
         ]
 
 
@@ -380,11 +376,7 @@ class InsightRepository(InMemoryRepository[Insight]):
     """Insight 전용 인메모리 저장소."""
 
     def list_by_source(self, source: InsightSource) -> List[Insight]:
-        return [
-            i
-            for i in self._store.values()
-            if isinstance(i, Insight) and i.source == source
-        ]
+        return [i for i in self._store.values() if isinstance(i, Insight) and i.source == source]
 
 
 # -----------------------------------------------------------------------------
@@ -406,10 +398,7 @@ def _build_sentiment_summary(sentiment: Dict[str, Any]) -> Optional[str]:
         pos_pct = float(sentiment.get("positive_pct", 0.0))
         neu_pct = float(sentiment.get("neutral_pct", 0.0))
         neg_pct = float(sentiment.get("negative_pct", 0.0))
-        return (
-            f"긍정 {pos_pct:.1f}% / 중립 {neu_pct:.1f}% / "
-            f"부정 {neg_pct:.1f}%"
-        )
+        return f"긍정 {pos_pct:.1f}% / 중립 {neu_pct:.1f}% / " f"부정 {neg_pct:.1f}%"
     except Exception:
         return None
 
@@ -477,6 +466,3 @@ def save_insight_from_result(
     insight = build_insight_from_result(source, result)
     INSIGHT_REPOSITORY.create(insight)
     return insight
-
-
-

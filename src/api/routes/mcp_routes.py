@@ -19,30 +19,36 @@ router = APIRouter(prefix="/api/mcp", tags=["MCP Tools"])
 # 요청/응답 모델
 # ============================================================================
 
+
 class WebSearchRequest(BaseModel):
     """웹 검색 요청"""
+
     query: str = Field(..., description="검색 쿼리")
     top_k: int = Field(default=5, ge=1, le=20, description="반환할 결과 수")
 
 
 class FetchUrlRequest(BaseModel):
     """URL 가져오기 요청"""
+
     url: str = Field(..., description="가져올 URL")
 
 
 class InsightListRequest(BaseModel):
     """인사이트 목록 요청"""
+
     source: Optional[str] = Field(default=None, description="소스 필터")
     limit: int = Field(default=10, ge=1, le=100)
 
 
 class MissionRecommendRequest(BaseModel):
     """미션 추천 요청"""
+
     insight_id: str = Field(..., description="인사이트 ID")
 
 
 class YouTubeSearchRequest(BaseModel):
     """YouTube 검색 요청"""
+
     query: str = Field(..., description="검색 쿼리")
     max_results: int = Field(default=10, ge=1, le=50)
     channel_id: Optional[str] = Field(default=None, description="특정 채널 ID")
@@ -50,6 +56,7 @@ class YouTubeSearchRequest(BaseModel):
 
 class YouTubeChannelRequest(BaseModel):
     """YouTube 채널 영상 요청"""
+
     channel_id: Optional[str] = Field(default=None, description="채널 ID")
     channel_handle: Optional[str] = Field(default=None, description="채널 핸들 (@handle)")
     max_results: int = Field(default=10, ge=1, le=50)
@@ -58,6 +65,7 @@ class YouTubeChannelRequest(BaseModel):
 # ============================================================================
 # MCP 도구 엔드포인트
 # ============================================================================
+
 
 @router.post("/web-search")
 async def web_search(request: WebSearchRequest):
@@ -72,11 +80,7 @@ async def web_search(request: WebSearchRequest):
         search = WebSearchMCP()
         urls = search.search(request.query, request.top_k)
 
-        return {
-            "query": request.query,
-            "count": len(urls),
-            "urls": urls
-        }
+        return {"query": request.query, "count": len(urls), "urls": urls}
     except Exception as e:
         logger.error(f"Web search failed: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
@@ -125,21 +129,20 @@ async def list_insights(source: Optional[str] = None, limit: int = 10):
 
         items = []
         for i in insights:
-            items.append({
-                "id": i.id,
-                "source": i.source.value,
-                "query": i.query,
-                "time_window": i.time_window,
-                "language": i.language,
-                "sentiment_summary": i.sentiment_summary,
-                "top_keywords": i.top_keywords[:5] if i.top_keywords else [],
-                "created_at": i.created_at.isoformat()
-            })
+            items.append(
+                {
+                    "id": i.id,
+                    "source": i.source.value,
+                    "query": i.query,
+                    "time_window": i.time_window,
+                    "language": i.language,
+                    "sentiment_summary": i.sentiment_summary,
+                    "top_keywords": i.top_keywords[:5] if i.top_keywords else [],
+                    "created_at": i.created_at.isoformat(),
+                }
+            )
 
-        return {
-            "total": len(items),
-            "items": items
-        }
+        return {"total": len(items), "items": items}
     except Exception as e:
         logger.error(f"List insights failed: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
@@ -152,7 +155,10 @@ async def recommend_missions(request: MissionRecommendRequest):
     """
     try:
         from src.domain.models import INSIGHT_REPOSITORY
-        from src.domain.mission import generate_missions_from_insight, recommend_creators_for_mission
+        from src.domain.mission import (
+            generate_missions_from_insight,
+            recommend_creators_for_mission,
+        )
 
         insight = INSIGHT_REPOSITORY.get(request.insight_id)
         if not insight:
@@ -163,34 +169,38 @@ async def recommend_missions(request: MissionRecommendRequest):
         recommendations = []
         for m in missions:
             creators = recommend_creators_for_mission(m)
-            recommendations.append({
-                "mission": {
-                    "id": m.id,
-                    "title": m.title,
-                    "description": m.description,
-                    "platforms": [p.value for p in m.platforms],
-                    "target_audience": m.target_audience,
-                    "expected_start": m.expected_start.isoformat() if m.expected_start else None,
-                    "expected_end": m.expected_end.isoformat() if m.expected_end else None
-                },
-                "creators": [
-                    {
-                        "id": c.id,
-                        "name": c.name,
-                        "handle": c.handle,
-                        "platform": c.primary_platform.value,
-                        "followers": c.followers,
-                        "avg_view_per_post": c.avg_view_per_post,
-                        "engagement_rate": c.avg_engagement_rate
-                    }
-                    for c in creators
-                ]
-            })
+            recommendations.append(
+                {
+                    "mission": {
+                        "id": m.id,
+                        "title": m.title,
+                        "description": m.description,
+                        "platforms": [p.value for p in m.platforms],
+                        "target_audience": m.target_audience,
+                        "expected_start": (
+                            m.expected_start.isoformat() if m.expected_start else None
+                        ),
+                        "expected_end": m.expected_end.isoformat() if m.expected_end else None,
+                    },
+                    "creators": [
+                        {
+                            "id": c.id,
+                            "name": c.name,
+                            "handle": c.handle,
+                            "platform": c.primary_platform.value,
+                            "followers": c.followers,
+                            "avg_view_per_post": c.avg_view_per_post,
+                            "engagement_rate": c.avg_engagement_rate,
+                        }
+                        for c in creators
+                    ],
+                }
+            )
 
         return {
             "insight_id": request.insight_id,
             "count": len(recommendations),
-            "recommendations": recommendations
+            "recommendations": recommendations,
         }
     except HTTPException:
         raise
@@ -212,16 +222,10 @@ async def youtube_search(request: YouTubeSearchRequest):
             raise HTTPException(status_code=503, detail="YouTube API not configured")
 
         videos = youtube.search_videos(
-            query=request.query,
-            max_results=request.max_results,
-            channel_id=request.channel_id
+            query=request.query, max_results=request.max_results, channel_id=request.channel_id
         )
 
-        return {
-            "query": request.query,
-            "count": len(videos),
-            "videos": videos
-        }
+        return {"query": request.query, "count": len(videos), "videos": videos}
     except HTTPException:
         raise
     except Exception as e:
@@ -244,14 +248,14 @@ async def youtube_channel_videos(request: YouTubeChannelRequest):
         videos = youtube.get_channel_videos(
             channel_id=request.channel_id,
             channel_username=request.channel_handle,
-            max_results=request.max_results
+            max_results=request.max_results,
         )
 
         return {
             "channel_id": request.channel_id,
             "channel_handle": request.channel_handle,
             "count": len(videos),
-            "videos": videos
+            "videos": videos,
         }
     except HTTPException:
         raise
@@ -271,37 +275,37 @@ async def list_tools():
                 "name": "web_search",
                 "endpoint": "/api/mcp/web-search",
                 "method": "POST",
-                "description": "Brave/SerpAPI를 사용한 웹 검색"
+                "description": "Brave/SerpAPI를 사용한 웹 검색",
             },
             {
                 "name": "fetch_url",
                 "endpoint": "/api/mcp/fetch-url",
                 "method": "POST",
-                "description": "URL에서 콘텐츠 가져오기"
+                "description": "URL에서 콘텐츠 가져오기",
             },
             {
                 "name": "list_insights",
                 "endpoint": "/api/mcp/insights",
                 "method": "GET",
-                "description": "저장된 인사이트 목록"
+                "description": "저장된 인사이트 목록",
             },
             {
                 "name": "recommend_missions",
                 "endpoint": "/api/mcp/recommend-missions",
                 "method": "POST",
-                "description": "미션 및 크리에이터 추천"
+                "description": "미션 및 크리에이터 추천",
             },
             {
                 "name": "youtube_search",
                 "endpoint": "/api/mcp/youtube/search",
                 "method": "POST",
-                "description": "YouTube 영상 검색"
+                "description": "YouTube 영상 검색",
             },
             {
                 "name": "youtube_channel_videos",
                 "endpoint": "/api/mcp/youtube/channel-videos",
                 "method": "POST",
-                "description": "YouTube 채널 영상 목록"
-            }
+                "description": "YouTube 채널 영상 목록",
+            },
         ]
     }

@@ -1,6 +1,7 @@
 """
 Tools for Viral Video Agent
 """
+
 import os
 import random
 import logging
@@ -24,15 +25,16 @@ logger = logging.getLogger(__name__)
 # Data Collection Tools
 # ============================================================================
 
+
 def fetch_video_stats(
-    platform: str,
-    market: str = "KR",
-    time_window: str = "24h"
+    platform: str, market: str = "KR", time_window: str = "24h"
 ) -> List[Dict[str, Any]]:
     """
     Fetch video statistics from YouTube/TikTok
     """
-    logger.info(f"[fetch_video_stats] platform={platform}, market={market}, time_window={time_window}")
+    logger.info(
+        f"[fetch_video_stats] platform={platform}, market={market}, time_window={time_window}"
+    )
 
     if platform == "youtube":
         return _fetch_youtube_stats(market, time_window)
@@ -87,18 +89,22 @@ def _get_sample_youtube_data(market: str) -> List[Dict[str, Any]]:
         likes = int(views * random.uniform(0.03, 0.08))
         comments = int(views * random.uniform(0.001, 0.005))
 
-        sample_videos.append({
-            "video_id": f"YT_{i:03d}",
-            "title": f"Sample YouTube Video {i+1}",
-            "channel": f"Channel {i % 5 + 1}",
-            "views": views,
-            "likes": likes,
-            "comments": comments,
-            "published_at": (datetime.now() - timedelta(hours=random.randint(1, 48))).isoformat(),
-            "platform": "youtube",
-            "url": f"https://youtube.com/watch?v=YT_{i:03d}",
-            "thumbnail": f"https://i.ytimg.com/vi/YT_{i:03d}/default.jpg"
-        })
+        sample_videos.append(
+            {
+                "video_id": f"YT_{i:03d}",
+                "title": f"Sample YouTube Video {i+1}",
+                "channel": f"Channel {i % 5 + 1}",
+                "views": views,
+                "likes": likes,
+                "comments": comments,
+                "published_at": (
+                    datetime.now() - timedelta(hours=random.randint(1, 48))
+                ).isoformat(),
+                "platform": "youtube",
+                "url": f"https://youtube.com/watch?v=YT_{i:03d}",
+                "thumbnail": f"https://i.ytimg.com/vi/YT_{i:03d}/default.jpg",
+            }
+        )
 
     return sample_videos
 
@@ -113,18 +119,22 @@ def _get_sample_tiktok_data(market: str) -> List[Dict[str, Any]]:
         likes = int(views * random.uniform(0.05, 0.12))
         comments = int(views * random.uniform(0.002, 0.008))
 
-        sample_videos.append({
-            "video_id": f"TT_{i:03d}",
-            "title": f"Sample TikTok Video {i+1}",
-            "channel": f"@creator{i % 5 + 1}",
-            "views": views,
-            "likes": likes,
-            "comments": comments,
-            "published_at": (datetime.now() - timedelta(hours=random.randint(1, 48))).isoformat(),
-            "platform": "tiktok",
-            "url": f"https://tiktok.com/@creator/video/TT_{i:03d}",
-            "thumbnail": f"https://tiktok.com/thumbnail/TT_{i:03d}.jpg"
-        })
+        sample_videos.append(
+            {
+                "video_id": f"TT_{i:03d}",
+                "title": f"Sample TikTok Video {i+1}",
+                "channel": f"@creator{i % 5 + 1}",
+                "views": views,
+                "likes": likes,
+                "comments": comments,
+                "published_at": (
+                    datetime.now() - timedelta(hours=random.randint(1, 48))
+                ).isoformat(),
+                "platform": "tiktok",
+                "url": f"https://tiktok.com/@creator/video/TT_{i:03d}",
+                "thumbnail": f"https://tiktok.com/thumbnail/TT_{i:03d}.jpg",
+            }
+        )
 
     return sample_videos
 
@@ -132,6 +142,7 @@ def _get_sample_tiktok_data(market: str) -> List[Dict[str, Any]]:
 # ============================================================================
 # Analysis Tools
 # ============================================================================
+
 
 def detect_spike(items: List[Dict[str, Any]], threshold: float = 2.0) -> Dict[str, Any]:
     """
@@ -148,7 +159,7 @@ def detect_spike(items: List[Dict[str, Any]], threshold: float = 2.0) -> Dict[st
 
     # Calculate standard deviation
     variance = sum((x - mean_views) ** 2 for x in views_list) / len(views_list)
-    std_views = variance ** 0.5
+    std_views = variance**0.5
 
     # Detect spikes
     spike_videos = []
@@ -157,10 +168,7 @@ def detect_spike(items: List[Dict[str, Any]], threshold: float = 2.0) -> Dict[st
         if std_views > 0:
             z_score = (views - mean_views) / std_views
             if z_score >= threshold:
-                spike_videos.append({
-                    **item,
-                    "z_score": z_score
-                })
+                spike_videos.append({**item, "z_score": z_score})
 
     # Sort by z_score
     spike_videos.sort(key=lambda x: x.get("z_score", 0), reverse=True)
@@ -169,7 +177,7 @@ def detect_spike(items: List[Dict[str, Any]], threshold: float = 2.0) -> Dict[st
         "spike_videos": spike_videos,
         "mean_views": mean_views,
         "std_views": std_views,
-        "total_spikes": len(spike_videos)
+        "total_spikes": len(spike_videos),
     }
 
 
@@ -188,7 +196,7 @@ def topic_cluster(items: List[Dict[str, Any]]) -> Dict[str, Any]:
         "교육": ["tutorial", "education", "learn", "튜토리얼", "교육", "배우기"],
         "엔터테인먼트": ["entertainment", "funny", "comedy", "엔터", "웃긴", "코미디"],
         "기술": ["tech", "technology", "review", "기술", "리뷰"],
-        "일상": ["vlog", "daily", "life", "브이로그", "일상"]
+        "일상": ["vlog", "daily", "life", "브이로그", "일상"],
     }
 
     clusters: Dict[str, List[Dict[str, Any]]] = {}
@@ -210,19 +218,12 @@ def topic_cluster(items: List[Dict[str, Any]]) -> Dict[str, Any]:
     cluster_stats = []
     for topic, videos in clusters.items():
         avg_views = sum(v.get("views", 0) for v in videos) / len(videos)
-        cluster_stats.append({
-            "topic": topic,
-            "count": len(videos),
-            "avg_views": avg_views
-        })
+        cluster_stats.append({"topic": topic, "count": len(videos), "avg_views": avg_views})
 
     # Sort by count
     cluster_stats.sort(key=lambda x: x["count"], reverse=True)
 
-    return {
-        "top_clusters": cluster_stats,
-        "total_clusters": len(clusters)
-    }
+    return {"top_clusters": cluster_stats, "total_clusters": len(clusters)}
 
 
 def generate_success_factors(
@@ -242,7 +243,9 @@ def generate_success_factors(
         try:
             return _generate_success_factors_llm(query, spike_videos, clusters, strategy=strategy)
         except Exception as e:
-            logger.error(f"[generate_success_factors] LLM analysis failed, falling back to template: {e}")
+            logger.error(
+                f"[generate_success_factors] LLM analysis failed, falling back to template: {e}"
+            )
 
     # 템플릿 기반 폴백
     return _generate_success_factors_template(query, spike_videos, clusters)
@@ -282,7 +285,9 @@ Video {i+1}:
         system_persona=DEFAULT_SYSTEM_PERSONA,
         query=query,
         video_summaries="\n".join(video_summaries),
-        cluster_summaries="\n".join(cluster_summaries) if cluster_summaries else "No clusters available"
+        cluster_summaries=(
+            "\n".join(cluster_summaries) if cluster_summaries else "No clusters available"
+        ),
     )
 
     if str(strategy).lower() == "cheap":
@@ -298,7 +303,10 @@ Video {i+1}:
         )
         return client.chat(
             messages=[
-                {"role": "system", "content": "You are a cheap gateway summarizer. Be concise and grounded."},
+                {
+                    "role": "system",
+                    "content": "You are a cheap gateway summarizer. Be concise and grounded.",
+                },
                 {"role": "user", "content": cheap_prompt},
             ],
             temperature=0.3,
@@ -333,9 +341,7 @@ Video {i+1}:
 
 
 def _generate_success_factors_template(
-    query: str,
-    spike_videos: List[Dict[str, Any]],
-    clusters: List[Dict[str, Any]]
+    query: str, spike_videos: List[Dict[str, Any]], clusters: List[Dict[str, Any]]
 ) -> str:
     """템플릿 기반 성공 요인 분석 (폴백)"""
     summary_lines = []
@@ -345,7 +351,7 @@ def _generate_success_factors_template(
         summary_lines.append(f"**최고 성과 영상**: {top_video['title']}")
         summary_lines.append(f"- 조회수: {top_video['views']:,}")
         summary_lines.append(f"- Z-Score: {top_video.get('z_score', 0):.2f}")
-        if top_video.get('engagement_rate'):
+        if top_video.get("engagement_rate"):
             summary_lines.append(f"- 참여율: {top_video['engagement_rate']:.2%}")
         summary_lines.append("")
 
@@ -360,12 +366,14 @@ def _generate_success_factors_template(
     summary_lines.append("**성공 요인:**")
 
     if spike_videos:
-        avg_views = sum(v.get('views', 0) for v in spike_videos) / len(spike_videos)
-        avg_likes = sum(v.get('likes', 0) for v in spike_videos) / len(spike_videos)
+        avg_views = sum(v.get("views", 0) for v in spike_videos) / len(spike_videos)
+        avg_likes = sum(v.get("likes", 0) for v in spike_videos) / len(spike_videos)
         avg_engagement = avg_likes / avg_views if avg_views > 0 else 0
 
         summary_lines.append(f"1. **높은 참여도**: 평균 참여율 {avg_engagement:.2%}")
-        summary_lines.append(f"2. **바이럴 잠재력**: 평균 Z-Score {sum(v.get('z_score', 0) for v in spike_videos) / len(spike_videos):.2f}")
+        summary_lines.append(
+            f"2. **바이럴 잠재력**: 평균 Z-Score {sum(v.get('z_score', 0) for v in spike_videos) / len(spike_videos):.2f}"
+        )
 
     summary_lines.append("3. **타이밍**: 트렌드를 빠르게 포착하여 초기에 콘텐츠 발행")
     summary_lines.append("4. **주제**: 대중의 관심사와 일치하는 토픽 선택")

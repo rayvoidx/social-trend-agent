@@ -9,6 +9,7 @@
 - Azure OpenAI
 - Ollama (Local)
 """
+
 from __future__ import annotations
 
 import json
@@ -64,6 +65,7 @@ class LLMClient:
     def _init_openai(self):
         """Initialize OpenAI client."""
         from openai import OpenAI
+
         api_key = os.getenv("OPENAI_API_KEY")
         if not api_key:
             raise ValueError("OPENAI_API_KEY not set")
@@ -76,6 +78,7 @@ class LLMClient:
     def _init_anthropic(self):
         """Initialize Anthropic client."""
         from anthropic import Anthropic
+
         api_key = os.getenv("ANTHROPIC_API_KEY")
         if not api_key:
             raise ValueError("ANTHROPIC_API_KEY not set")
@@ -88,6 +91,7 @@ class LLMClient:
     def _init_google(self):
         """Initialize Google Gemini client."""
         import google.generativeai as genai
+
         api_key = os.getenv("GOOGLE_API_KEY")
         if not api_key:
             raise ValueError("GOOGLE_API_KEY not set")
@@ -101,6 +105,7 @@ class LLMClient:
     def _init_groq(self):
         """Initialize Groq client."""
         from groq import Groq  # type: ignore[import]
+
         api_key = os.getenv("GROQ_API_KEY")
         if not api_key:
             raise ValueError("GROQ_API_KEY not set")
@@ -112,6 +117,7 @@ class LLMClient:
     def _init_azure(self):
         """Initialize Azure OpenAI client."""
         from openai import AzureOpenAI
+
         api_key = os.getenv("AZURE_OPENAI_API_KEY")
         endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
 
@@ -132,6 +138,7 @@ class LLMClient:
     def _init_ollama(self):
         """Initialize Ollama client."""
         from openai import OpenAI
+
         base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 
         self._client = OpenAI(
@@ -147,7 +154,7 @@ class LLMClient:
         temperature: float = 0.7,
         max_tokens: int = 2000,
         json_mode: bool = False,
-        **kwargs
+        **kwargs,
     ) -> str:
         """
         LLM에 메시지 전송.
@@ -170,13 +177,9 @@ class LLMClient:
                     messages, temperature, max_tokens, json_mode, **kwargs
                 )
             elif self.provider == "anthropic":
-                return self._chat_anthropic(
-                    messages, temperature, max_tokens, **kwargs
-                )
+                return self._chat_anthropic(messages, temperature, max_tokens, **kwargs)
             elif self.provider == "google":
-                return self._chat_google(
-                    messages, temperature, max_tokens, **kwargs
-                )
+                return self._chat_google(messages, temperature, max_tokens, **kwargs)
             else:
                 raise ValueError(f"Unsupported provider: {self.provider}")
 
@@ -190,7 +193,7 @@ class LLMClient:
         temperature: float,
         max_tokens: int,
         json_mode: bool,
-        **kwargs
+        **kwargs,
     ) -> str:
         """Chat with OpenAI-compatible APIs."""
         client = cast(Any, self._client)
@@ -234,7 +237,9 @@ class LLMClient:
                 return response.choices[0].message.content
 
             # If the project doesn't have access to the requested model, fall back to default.
-            if ("does not have access to model" in msg or "model_not_found" in msg) and effective_model != self._model:
+            if (
+                "does not have access to model" in msg or "model_not_found" in msg
+            ) and effective_model != self._model:
                 logger.warning(
                     f"Model access error for '{effective_model}'. Falling back to default model '{self._model}'."
                 )
@@ -248,11 +253,7 @@ class LLMClient:
             raise
 
     def _chat_anthropic(
-        self,
-        messages: List[Dict[str, str]],
-        temperature: float,
-        max_tokens: int,
-        **kwargs
+        self, messages: List[Dict[str, str]], temperature: float, max_tokens: int, **kwargs
     ) -> str:
         """Chat with Anthropic API."""
         client = cast(Any, self._client)
@@ -266,10 +267,12 @@ class LLMClient:
             if msg["role"] == "system":
                 system_message = msg["content"]
             else:
-                anthropic_messages.append({
-                    "role": msg["role"],
-                    "content": msg["content"],
-                })
+                anthropic_messages.append(
+                    {
+                        "role": msg["role"],
+                        "content": msg["content"],
+                    }
+                )
 
         response = client.messages.create(
             model=self._model,
@@ -281,11 +284,7 @@ class LLMClient:
         return response.content[0].text
 
     def _chat_google(
-        self,
-        messages: List[Dict[str, str]],
-        temperature: float,
-        max_tokens: int,
-        **kwargs
+        self, messages: List[Dict[str, str]], temperature: float, max_tokens: int, **kwargs
     ) -> str:
         """Chat with Google Gemini API."""
         client = cast(Any, self._client)
@@ -295,10 +294,12 @@ class LLMClient:
         gemini_messages = []
         for msg in messages:
             role = "user" if msg["role"] in ["user", "system"] else "model"
-            gemini_messages.append({
-                "role": role,
-                "parts": [{"text": msg["content"]}],
-            })
+            gemini_messages.append(
+                {
+                    "role": role,
+                    "parts": [{"text": msg["content"]}],
+                }
+            )
 
         response = client.generate_content(
             gemini_messages,
@@ -315,7 +316,7 @@ class LLMClient:
         messages: List[Dict[str, str]],
         schema: Optional[Dict[str, Any]] = None,
         temperature: float = 0.3,
-        **kwargs
+        **kwargs,
     ) -> Dict[str, Any]:
         """
         JSON 형식으로 응답 받기.
@@ -334,17 +335,14 @@ class LLMClient:
             if messages and messages[-1]["role"] == "user":
                 messages[-1]["content"] += schema_instruction
             else:
-                messages.append({
-                    "role": "user",
-                    "content": f"Return your response as JSON in this format:\n{json.dumps(schema, indent=2)}"
-                })
+                messages.append(
+                    {
+                        "role": "user",
+                        "content": f"Return your response as JSON in this format:\n{json.dumps(schema, indent=2)}",
+                    }
+                )
 
-        response = self.chat(
-            messages,
-            temperature=temperature,
-            json_mode=True,
-            **kwargs
-        )
+        response = self.chat(messages, temperature=temperature, json_mode=True, **kwargs)
 
         # Parse JSON from response
         try:
@@ -387,16 +385,13 @@ class LLMClient:
         else:
             # Fallback to OpenAI for embeddings
             from openai import OpenAI
+
             client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
             model = os.getenv("EMBEDDING_MODEL_NAME", "text-embedding-3-large")
             response = client.embeddings.create(model=model, input=text)
             return response.data[0].embedding
 
-    def get_embeddings_batch(
-        self,
-        texts: List[str],
-        batch_size: int = 100
-    ) -> List[List[float]]:
+    def get_embeddings_batch(self, texts: List[str], batch_size: int = 100) -> List[List[float]]:
         """
         배치로 임베딩 생성.
 
@@ -410,7 +405,7 @@ class LLMClient:
         embeddings = []
 
         for i in range(0, len(texts), batch_size):
-            batch = texts[i:i + batch_size]
+            batch = texts[i : i + batch_size]
 
             if self.provider in ["openai", "azure"]:
                 model = os.getenv("EMBEDDING_MODEL_NAME", "text-embedding-3-large")

@@ -6,6 +6,7 @@ Supports:
 - User media feed
 - Business account insights
 """
+
 from __future__ import annotations
 
 import logging
@@ -40,12 +41,7 @@ class InstagramClient(SocialConnector):
         """Check if Instagram API credentials are configured."""
         return bool(self._access_token and self._business_account_id)
 
-    def fetch_posts(
-        self,
-        query: str,
-        max_results: int = 20,
-        **kwargs
-    ) -> List[CollectedItem]:
+    def fetch_posts(self, query: str, max_results: int = 20, **kwargs) -> List[CollectedItem]:
         """
         Fetch Instagram posts by hashtag.
 
@@ -99,18 +95,14 @@ class InstagramClient(SocialConnector):
 
         return None
 
-    def _get_hashtag_recent_media(
-        self,
-        hashtag_id: str,
-        max_results: int
-    ) -> List[CollectedItem]:
+    def _get_hashtag_recent_media(self, hashtag_id: str, max_results: int) -> List[CollectedItem]:
         """Get recent media for a hashtag."""
         url = f"{self.BASE_URL}/{hashtag_id}/recent_media"
 
         params = {
             "user_id": self._business_account_id,
             "fields": "id,caption,media_type,media_url,permalink,timestamp,"
-                      "like_count,comments_count,username",
+            "like_count,comments_count,username",
             "access_token": self._access_token,
         }
 
@@ -123,10 +115,7 @@ class InstagramClient(SocialConnector):
             caption = media.get("caption", "")
 
             # Extract hashtags from caption
-            hashtags = [
-                word[1:] for word in caption.split()
-                if word.startswith("#")
-            ]
+            hashtags = [word[1:] for word in caption.split() if word.startswith("#")]
 
             # Parse timestamp
             timestamp = media.get("timestamp", "")
@@ -170,9 +159,7 @@ class InstagramClient(SocialConnector):
                 return None
 
     def fetch_user_media(
-        self,
-        user_id: Optional[str] = None,
-        max_results: int = 20
+        self, user_id: Optional[str] = None, max_results: int = 20
     ) -> List[CollectedItem]:
         """
         Fetch media from business account.
@@ -192,7 +179,7 @@ class InstagramClient(SocialConnector):
 
         params = {
             "fields": "id,caption,media_type,media_url,permalink,timestamp,"
-                      "like_count,comments_count,insights.metric(engagement,impressions,reach)",
+            "like_count,comments_count,insights.metric(engagement,impressions,reach)",
             "access_token": self._access_token,
             "limit": max_results,
         }
@@ -217,9 +204,7 @@ class InstagramClient(SocialConnector):
                         title=caption[:80] if caption else "Instagram Post",
                         url=media.get("permalink", ""),
                         content=caption,
-                        published_at=self._parse_instagram_date(
-                            media.get("timestamp", "")
-                        ),
+                        published_at=self._parse_instagram_date(media.get("timestamp", "")),
                         views=insights.get("impressions", 0),
                         likes=media.get("like_count", 0),
                         comments=media.get("comments_count", 0),
@@ -236,10 +221,7 @@ class InstagramClient(SocialConnector):
             return []
 
     def get_account_insights(
-        self,
-        metric: str = "impressions",
-        period: str = "day",
-        user_id: Optional[str] = None
+        self, metric: str = "impressions", period: str = "day", user_id: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Get account-level insights.

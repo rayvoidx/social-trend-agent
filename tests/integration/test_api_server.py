@@ -3,6 +3,7 @@ FastAPI 서버 통합 테스트
 
 API 엔드포인트를 실제로 호출하여 테스트합니다.
 """
+
 import pytest
 from fastapi.testclient import TestClient
 from unittest.mock import patch, MagicMock, AsyncMock
@@ -13,6 +14,7 @@ def client():
     """테스트 클라이언트 생성"""
     try:
         from src.api.routes.dashboard import app
+
         return TestClient(app)
     except ImportError:
         pytest.skip("FastAPI server not available")
@@ -31,16 +33,14 @@ def sample_agent_result():
         "query": "AI",
         "time_window": "7d",
         "language": "ko",
-        "normalized": [
-            {"title": "Test News", "description": "Test description"}
-        ],
+        "normalized": [{"title": "Test News", "description": "Test description"}],
         "analysis": {
             "sentiment": {"positive": 1, "neutral": 0, "negative": 0},
-            "keywords": {"top_keywords": [{"keyword": "AI", "count": 10}]}
+            "keywords": {"top_keywords": [{"keyword": "AI", "count": 10}]},
         },
         "report_md": "# Test Report",
         "metrics": {"coverage": 0.9, "factuality": 1.0, "actionability": 1.0},
-        "run_id": "test-run-id"
+        "run_id": "test-run-id",
     }
 
 
@@ -73,7 +73,7 @@ class TestTaskEndpoints:
         When: POST /api/tasks
         Then: 200 OK, task_id 반환
         """
-        with patch('src.api.routes.dashboard.executor') as mock_executor:
+        with patch("src.api.routes.dashboard.executor") as mock_executor:
             # Mock executor.submit_task
             mock_executor.submit_task = AsyncMock(return_value="test-task-id")
 
@@ -83,8 +83,8 @@ class TestTaskEndpoints:
                     "agent_name": "news_trend_agent",
                     "query": "AI",
                     "params": {"time_window": "7d"},
-                    "priority": 1
-                }
+                    "priority": 1,
+                },
             )
 
             assert response.status_code == 200
@@ -101,7 +101,7 @@ class TestTaskEndpoints:
         """
         task_id = "test-task-id"
 
-        with patch('src.api.routes.dashboard.executor') as mock_executor:
+        with patch("src.api.routes.dashboard.executor") as mock_executor:
             # Mock task object
             mock_task = MagicMock()
             mock_task.task_id = task_id
@@ -130,7 +130,7 @@ class TestTaskEndpoints:
         When: GET /api/tasks/{task_id}
         Then: 404 Not Found
         """
-        with patch('src.api.routes.dashboard.executor') as mock_executor:
+        with patch("src.api.routes.dashboard.executor") as mock_executor:
             mock_executor.task_queue.get_task = AsyncMock(return_value=None)
 
             response = client.get("/api/tasks/non-existent-id")
@@ -144,13 +144,13 @@ class TestTaskEndpoints:
         When: GET /api/tasks
         Then: 200 OK, 태스크 목록 반환
         """
-        with patch('src.api.routes.dashboard.executor') as mock_executor:
+        with patch("src.api.routes.dashboard.executor") as mock_executor:
             mock_task = MagicMock()
             mock_task.to_dict.return_value = {
                 "task_id": "test-id",
                 "agent_name": "news_trend_agent",
                 "query": "AI",
-                "status": "completed"
+                "status": "completed",
             }
             mock_task.created_at = 1234567890.0
 
@@ -174,7 +174,7 @@ class TestDashboardEndpoint:
         When: GET /api/dashboard/summary
         Then: 200 OK, 통계 정보 반환
         """
-        with patch('src.api.routes.dashboard.executor') as mock_executor:
+        with patch("src.api.routes.dashboard.executor") as mock_executor:
             mock_task = MagicMock()
             mock_task.agent_name = "news_trend_agent"
             mock_task.status.value = "completed"
@@ -183,11 +183,12 @@ class TestDashboardEndpoint:
             mock_task.to_dict.return_value = {
                 "task_id": "test-id",
                 "agent_name": "news_trend_agent",
-                "status": "completed"
+                "status": "completed",
             }
 
             # TaskStatus enum mock
             from src.infrastructure.distributed import TaskStatus
+
             mock_task.status = TaskStatus.COMPLETED
 
             mock_executor.task_queue.get_all_tasks = AsyncMock(return_value=[mock_task])
@@ -210,12 +211,10 @@ class TestMetricsEndpoint:
         When: GET /api/metrics
         Then: 200 OK, 메트릭 정보 반환
         """
-        with patch('src.api.routes.dashboard.executor') as mock_executor:
-            mock_executor.get_statistics = AsyncMock(return_value={
-                "total_tasks": 10,
-                "completed": 8,
-                "failed": 2
-            })
+        with patch("src.api.routes.dashboard.executor") as mock_executor:
+            mock_executor.get_statistics = AsyncMock(
+                return_value={"total_tasks": 10, "completed": 8, "failed": 2}
+            )
             mock_executor.task_queue.get_all_tasks = AsyncMock(return_value=[])
 
             response = client.get("/api/metrics")
@@ -254,7 +253,7 @@ class TestWorkersEndpoint:
         When: GET /api/workers
         Then: 200 OK, 워커 정보 반환
         """
-        with patch('src.api.routes.dashboard.executor') as mock_executor:
+        with patch("src.api.routes.dashboard.executor") as mock_executor:
             mock_worker = MagicMock()
             mock_worker.worker_id = "worker-1"
             mock_worker.is_running = True
@@ -280,10 +279,7 @@ class TestCORS:
         When: GET 요청 with Origin header
         Then: Access-Control-Allow-Origin 헤더 포함
         """
-        response = client.get(
-            "/api/health",
-            headers={"Origin": "http://localhost:3000"}
-        )
+        response = client.get("/api/health", headers={"Origin": "http://localhost:3000"})
 
         assert response.status_code == 200
         # CORS 미들웨어가 활성화되어 있으면 헤더가 포함됨
@@ -300,11 +296,10 @@ class TestStatisticsEndpoint:
         When: GET /api/statistics
         Then: 200 OK, 통계 정보 반환
         """
-        with patch('src.api.routes.dashboard.executor') as mock_executor:
-            mock_executor.get_statistics = AsyncMock(return_value={
-                "total_tasks": 100,
-                "completed": 95
-            })
+        with patch("src.api.routes.dashboard.executor") as mock_executor:
+            mock_executor.get_statistics = AsyncMock(
+                return_value={"total_tasks": 100, "completed": 95}
+            )
             mock_executor.task_queue.get_all_tasks = AsyncMock(return_value=[])
 
             response = client.get("/api/statistics")
@@ -326,7 +321,7 @@ class TestErrorHandling:
         When: GET /api/metrics
         Then: 503 Service Unavailable
         """
-        with patch('src.api.routes.dashboard.executor', None):
+        with patch("src.api.routes.dashboard.executor", None):
             response = client.get("/api/metrics")
 
             assert response.status_code == 503

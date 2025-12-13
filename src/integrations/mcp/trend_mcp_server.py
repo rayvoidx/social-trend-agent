@@ -40,7 +40,9 @@ async def analyze_news_trend(query: str, time_window: str = "7d", language: str 
     try:
         from src.agents.news_trend.graph import run_agent
 
-        result = run_agent(query=query, time_window=time_window, language=language, require_approval=False)
+        result = run_agent(
+            query=query, time_window=time_window, language=language, require_approval=False
+        )
         d = _dump(result)
         return json.dumps(
             {
@@ -65,7 +67,9 @@ async def analyze_viral_video(query: str, time_window: str = "24h", market: str 
     try:
         from src.agents.viral_video.graph import run_agent
 
-        result = run_agent(query=query, time_window=time_window, market=market, require_approval=False)
+        result = run_agent(
+            query=query, time_window=time_window, market=market, require_approval=False
+        )
         d = _dump(result)
         return json.dumps(
             {
@@ -136,21 +140,27 @@ async def analyze_social_trend(
 async def x_search(query: str, max_results: int = 20) -> str:
     """Fetch X posts via Supadata MCP and return JSON string."""
     posts = await fetch_x_posts_via_mcp_async(query=query, max_results=max_results)
-    return json.dumps({"status": "success", "query": query, "posts": posts}, ensure_ascii=False, indent=2)
+    return json.dumps(
+        {"status": "success", "query": query, "posts": posts}, ensure_ascii=False, indent=2
+    )
 
 
 @mcp.tool()
 async def tiktok_search(query: str, max_count: int = 20) -> str:
     """Fetch TikTok videos via Supadata MCP and return JSON string."""
     videos = await fetch_tiktok_videos_via_mcp_async(query=query, max_count=max_count)
-    return json.dumps({"status": "success", "query": query, "videos": videos}, ensure_ascii=False, indent=2)
+    return json.dumps(
+        {"status": "success", "query": query, "videos": videos}, ensure_ascii=False, indent=2
+    )
 
 
 @mcp.tool()
 async def youtube_trending(market: str = "KR", limit: int = 20) -> str:
     """Fetch YouTube trending via Supadata MCP and return JSON string."""
     videos = await fetch_youtube_trending_via_mcp_async(market=market, limit=limit)
-    return json.dumps({"status": "success", "market": market, "videos": videos}, ensure_ascii=False, indent=2)
+    return json.dumps(
+        {"status": "success", "market": market, "videos": videos}, ensure_ascii=False, indent=2
+    )
 
 
 def main() -> None:
@@ -160,5 +170,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
-

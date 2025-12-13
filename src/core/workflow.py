@@ -6,6 +6,7 @@ Human-in-the-loop 워크플로우 관리
 - 검토/승인 프로세스
 - 알림 통합
 """
+
 from __future__ import annotations
 
 import logging
@@ -23,8 +24,10 @@ logger = logging.getLogger(__name__)
 # Status Definitions
 # =============================================================================
 
+
 class WorkflowStatus(str, Enum):
     """워크플로우 상태."""
+
     DRAFT = "draft"
     PENDING_REVIEW = "pending_review"
     IN_REVIEW = "in_review"
@@ -37,6 +40,7 @@ class WorkflowStatus(str, Enum):
 
 class ReviewAction(str, Enum):
     """검토 액션."""
+
     APPROVE = "approve"
     REJECT = "reject"
     REQUEST_REVISION = "request_revision"
@@ -83,9 +87,11 @@ VALID_TRANSITIONS = {
 # Data Classes
 # =============================================================================
 
+
 @dataclass
 class ReviewComment:
     """검토 코멘트."""
+
     reviewer: str
     comment: str
     created_at: float = field(default_factory=time.time)
@@ -95,6 +101,7 @@ class ReviewComment:
 @dataclass
 class WorkflowItem:
     """워크플로우 아이템."""
+
     id: str
     type: str  # insight, mission, etc.
     status: WorkflowStatus = WorkflowStatus.DRAFT
@@ -133,6 +140,7 @@ class WorkflowItem:
 # Workflow Manager
 # =============================================================================
 
+
 class WorkflowManager:
     """
     워크플로우 관리자.
@@ -154,7 +162,7 @@ class WorkflowManager:
         type: str,
         data: Dict[str, Any],
         created_by: str = "system",
-        auto_submit: bool = False
+        auto_submit: bool = False,
     ) -> WorkflowItem:
         """
         새 워크플로우 아이템 생성.
@@ -188,11 +196,7 @@ class WorkflowManager:
         """아이템 조회."""
         return self._items.get(id)
 
-    def update_item_data(
-        self,
-        id: str,
-        data: Dict[str, Any]
-    ) -> Optional[WorkflowItem]:
+    def update_item_data(self, id: str, data: Dict[str, Any]) -> Optional[WorkflowItem]:
         """아이템 데이터 업데이트."""
         item = self._items.get(id)
         if not item:
@@ -207,7 +211,7 @@ class WorkflowManager:
         id: str,
         new_status: WorkflowStatus,
         comment: Optional[str] = None,
-        actor: str = "system"
+        actor: str = "system",
     ) -> bool:
         """
         상태 전이.
@@ -229,9 +233,7 @@ class WorkflowManager:
         # Validate transition
         valid_next = VALID_TRANSITIONS.get(item.status, [])
         if new_status not in valid_next:
-            logger.error(
-                f"Invalid transition: {item.status.value} -> {new_status.value}"
-            )
+            logger.error(f"Invalid transition: {item.status.value} -> {new_status.value}")
             return False
 
         old_status = item.status
@@ -239,9 +241,7 @@ class WorkflowManager:
         item.updated_at = time.time()
 
         if comment:
-            item.review_comments.append(
-                ReviewComment(reviewer=actor, comment=comment)
-            )
+            item.review_comments.append(ReviewComment(reviewer=actor, comment=comment))
 
         logger.info(f"Status transition: {id} {old_status.value} -> {new_status.value}")
 
@@ -250,11 +250,7 @@ class WorkflowManager:
 
         return True
 
-    def submit_for_review(
-        self,
-        id: str,
-        assignee: Optional[str] = None
-    ) -> bool:
+    def submit_for_review(self, id: str, assignee: Optional[str] = None) -> bool:
         """검토 요청 제출."""
         item = self._items.get(id)
         if not item:
@@ -265,18 +261,10 @@ class WorkflowManager:
             return False
 
         item.assigned_to = assignee
-        success = self.transition_status(
-            id,
-            WorkflowStatus.PENDING_REVIEW,
-            "Submitted for review"
-        )
+        success = self.transition_status(id, WorkflowStatus.PENDING_REVIEW, "Submitted for review")
 
         if success:
-            self._send_notification(
-                "review_requested",
-                item,
-                assignee
-            )
+            self._send_notification("review_requested", item, assignee)
 
         return success
 
@@ -288,19 +276,10 @@ class WorkflowManager:
 
         item.assigned_to = reviewer
         return self.transition_status(
-            id,
-            WorkflowStatus.IN_REVIEW,
-            f"Review started by {reviewer}",
-            actor=reviewer
+            id, WorkflowStatus.IN_REVIEW, f"Review started by {reviewer}", actor=reviewer
         )
 
-    def submit_review(
-        self,
-        id: str,
-        action: ReviewAction,
-        comment: str,
-        reviewer: str
-    ) -> bool:
+    def submit_review(self, id: str, action: ReviewAction, comment: str, reviewer: str) -> bool:
         """
         검토 결과 제출.
 
@@ -323,11 +302,7 @@ class WorkflowManager:
 
         # Add review comment
         item.review_comments.append(
-            ReviewComment(
-                reviewer=reviewer,
-                comment=comment,
-                action=action
-            )
+            ReviewComment(reviewer=reviewer, comment=comment, action=action)
         )
 
         # Determine new status
@@ -346,11 +321,7 @@ class WorkflowManager:
 
         if success:
             self._trigger_hooks("on_review_submit", item, action, reviewer)
-            self._send_notification(
-                f"review_{action.value}",
-                item,
-                item.created_by
-            )
+            self._send_notification(f"review_{action.value}", item, item.created_by)
 
         return success
 
@@ -361,10 +332,7 @@ class WorkflowManager:
             return False
 
         success = self.transition_status(
-            id,
-            WorkflowStatus.PUBLISHED,
-            f"Published by {publisher}",
-            publisher
+            id, WorkflowStatus.PUBLISHED, f"Published by {publisher}", publisher
         )
 
         if success:
@@ -374,11 +342,7 @@ class WorkflowManager:
 
     def archive(self, id: str, reason: str = "") -> bool:
         """아이템 아카이브."""
-        return self.transition_status(
-            id,
-            WorkflowStatus.ARCHIVED,
-            f"Archived: {reason}"
-        )
+        return self.transition_status(id, WorkflowStatus.ARCHIVED, f"Archived: {reason}")
 
     # =========================================================================
     # Query Methods
@@ -388,7 +352,7 @@ class WorkflowManager:
         self,
         status: Optional[WorkflowStatus] = None,
         type: Optional[str] = None,
-        assigned_to: Optional[str] = None
+        assigned_to: Optional[str] = None,
     ) -> List[WorkflowItem]:
         """아이템 목록 조회."""
         items = list(self._items.values())
@@ -443,10 +407,7 @@ class WorkflowManager:
                 logger.error(f"Hook error ({event}): {e}")
 
     def _send_notification(
-        self,
-        notification_type: str,
-        item: WorkflowItem,
-        recipient: Optional[str] = None
+        self, notification_type: str, item: WorkflowItem, recipient: Optional[str] = None
     ):
         """알림 전송."""
         # Slack notification
@@ -460,11 +421,7 @@ class WorkflowManager:
 
         logger.info(f"Notification sent: {notification_type} for {item.id}")
 
-    def _send_slack_notification(
-        self,
-        notification_type: str,
-        item: WorkflowItem
-    ):
+    def _send_slack_notification(self, notification_type: str, item: WorkflowItem):
         """Slack 알림 전송."""
         try:
             import requests
@@ -482,8 +439,7 @@ class WorkflowManager:
             }
 
             message = messages.get(
-                notification_type,
-                f"📋 {notification_type}: {item.type} `{item.id}`"
+                notification_type, f"📋 {notification_type}: {item.type} `{item.id}`"
             )
 
             payload = {
@@ -493,10 +449,14 @@ class WorkflowManager:
                         "color": "#36a64f" if "approve" in notification_type else "#ff0000",
                         "fields": [
                             {"title": "Status", "value": item.status.value, "short": True},
-                            {"title": "Assigned To", "value": item.assigned_to or "Unassigned", "short": True},
-                        ]
+                            {
+                                "title": "Assigned To",
+                                "value": item.assigned_to or "Unassigned",
+                                "short": True,
+                            },
+                        ],
                     }
-                ]
+                ],
             }
 
             requests.post(webhook_url, json=payload, timeout=5)
@@ -504,12 +464,7 @@ class WorkflowManager:
         except Exception as e:
             logger.error(f"Slack notification failed: {e}")
 
-    def _send_email_notification(
-        self,
-        notification_type: str,
-        item: WorkflowItem,
-        recipient: str
-    ):
+    def _send_email_notification(self, notification_type: str, item: WorkflowItem, recipient: str):
         """이메일 알림 전송."""
         # Implementation depends on email service
         pass
@@ -534,33 +489,24 @@ def get_workflow_manager() -> WorkflowManager:
 # Helper Functions
 # =============================================================================
 
+
 def create_insight_workflow(
-    insight_id: str,
-    insight_data: Dict[str, Any],
-    auto_submit: bool = True
+    insight_id: str, insight_data: Dict[str, Any], auto_submit: bool = True
 ) -> WorkflowItem:
     """인사이트 워크플로우 생성."""
     manager = get_workflow_manager()
     return manager.create_item(
-        id=insight_id,
-        type="insight",
-        data=insight_data,
-        auto_submit=auto_submit
+        id=insight_id, type="insight", data=insight_data, auto_submit=auto_submit
     )
 
 
 def create_mission_workflow(
-    mission_id: str,
-    mission_data: Dict[str, Any],
-    auto_submit: bool = True
+    mission_id: str, mission_data: Dict[str, Any], auto_submit: bool = True
 ) -> WorkflowItem:
     """미션 워크플로우 생성."""
     manager = get_workflow_manager()
     return manager.create_item(
-        id=mission_id,
-        type="mission",
-        data=mission_data,
-        auto_submit=auto_submit
+        id=mission_id, type="mission", data=mission_data, auto_submit=auto_submit
     )
 
 
@@ -573,12 +519,7 @@ def approve_item(id: str, reviewer: str, comment: str = "Approved") -> bool:
     if item and item.status == WorkflowStatus.PENDING_REVIEW:
         manager.start_review(id, reviewer)
 
-    return manager.submit_review(
-        id,
-        ReviewAction.APPROVE,
-        comment,
-        reviewer
-    )
+    return manager.submit_review(id, ReviewAction.APPROVE, comment, reviewer)
 
 
 def reject_item(id: str, reviewer: str, comment: str) -> bool:
@@ -589,12 +530,7 @@ def reject_item(id: str, reviewer: str, comment: str) -> bool:
     if item and item.status == WorkflowStatus.PENDING_REVIEW:
         manager.start_review(id, reviewer)
 
-    return manager.submit_review(
-        id,
-        ReviewAction.REJECT,
-        comment,
-        reviewer
-    )
+    return manager.submit_review(id, ReviewAction.REJECT, comment, reviewer)
 
 
 def request_revision(id: str, reviewer: str, comment: str) -> bool:
@@ -605,9 +541,4 @@ def request_revision(id: str, reviewer: str, comment: str) -> bool:
     if item and item.status == WorkflowStatus.PENDING_REVIEW:
         manager.start_review(id, reviewer)
 
-    return manager.submit_review(
-        id,
-        ReviewAction.REQUEST_REVISION,
-        comment,
-        reviewer
-    )
+    return manager.submit_review(id, ReviewAction.REQUEST_REVISION, comment, reviewer)

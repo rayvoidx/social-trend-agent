@@ -1,6 +1,7 @@
 """
 견고한 API 호출을 위한 재시도 및 백오프 유틸리티
 """
+
 import time
 import functools
 from typing import Callable, Any, Optional, Tuple, Type
@@ -10,12 +11,13 @@ from src.infrastructure.timeout import run_with_timeout, HardTimeoutError
 
 logger = logging.getLogger(__name__)
 
+
 def backoff_retry(
     max_retries: int = 5,
     backoff_base: float = 2.0,
     backoff_factor: float = 1.0,
     exceptions: Tuple[Type[Exception], ...] = (Exception,),
-    on_retry: Optional[Callable[[Exception, int], None]] = None
+    on_retry: Optional[Callable[[Exception, int], None]] = None,
 ):
     """
     지수 백오프 재시도 데코레이터
@@ -30,6 +32,7 @@ def backoff_retry(
     백오프 공식: backoff_factor * (backoff_base ** retry_count)
     예시: 1 * (2 ** 0) = 1초, 1 * (2 ** 1) = 2초, 1 * (2 ** 2) = 4초, ...
     """
+
     def decorator(func: Callable) -> Callable:
         @functools.wraps(func)
         def wrapper(*args, **kwargs) -> Any:
@@ -63,15 +66,15 @@ def backoff_retry(
                 try:
                     # Hard timeout (process-first; thread fallback) if provided.
                     if isinstance(plan_timeout, int) and plan_timeout > 0:
-                        result = run_with_timeout(func, *args, timeout_seconds=plan_timeout, prefer_process=True, **kwargs)
+                        result = run_with_timeout(
+                            func, *args, timeout_seconds=plan_timeout, prefer_process=True, **kwargs
+                        )
                     else:
                         result = func(*args, **kwargs)
 
                     # Log success after retry
                     if attempt > 0:
-                        logger.info(
-                            f"{func.__name__} succeeded after {attempt} retries"
-                        )
+                        logger.info(f"{func.__name__} succeeded after {attempt} retries")
 
                     return result
 
@@ -82,7 +85,7 @@ def backoff_retry(
                             f"{func.__name__} hard-timeout after {dyn_max_retries} retries: {e}"
                         )
                         break
-                    backoff_time = dyn_backoff_factor * (dyn_backoff_base ** attempt)
+                    backoff_time = dyn_backoff_factor * (dyn_backoff_base**attempt)
                     logger.warning(
                         f"{func.__name__} hard-timeout (attempt {attempt + 1}/{dyn_max_retries}). "
                         f"Retrying in {backoff_time:.1f}s..."
@@ -93,13 +96,11 @@ def backoff_retry(
 
                     # Don't retry on last attempt
                     if attempt >= dyn_max_retries:
-                        logger.error(
-                            f"{func.__name__} failed after {dyn_max_retries} retries: {e}"
-                        )
+                        logger.error(f"{func.__name__} failed after {dyn_max_retries} retries: {e}")
                         break
 
                     # Calculate backoff
-                    backoff_time = dyn_backoff_factor * (dyn_backoff_base ** attempt)
+                    backoff_time = dyn_backoff_factor * (dyn_backoff_base**attempt)
 
                     logger.warning(
                         f"{func.__name__} attempt {attempt + 1}/{dyn_max_retries} failed: {e}. "
@@ -116,6 +117,7 @@ def backoff_retry(
             raise last_exception
 
         return wrapper
+
     return decorator
 
 
@@ -127,7 +129,7 @@ class RetryConfig:
         max_retries: int = 5,
         backoff_base: float = 2.0,
         backoff_factor: float = 1.0,
-        timeout: float = 30.0
+        timeout: float = 30.0,
     ):
         self.max_retries = max_retries
         self.backoff_base = backoff_base
@@ -136,23 +138,11 @@ class RetryConfig:
 
 
 # Predefined retry configs
-RETRY_CONFIG_AGGRESSIVE = RetryConfig(
-    max_retries=3,
-    backoff_base=1.5,
-    backoff_factor=0.5
-)
+RETRY_CONFIG_AGGRESSIVE = RetryConfig(max_retries=3, backoff_base=1.5, backoff_factor=0.5)
 
-RETRY_CONFIG_DEFAULT = RetryConfig(
-    max_retries=5,
-    backoff_base=2.0,
-    backoff_factor=1.0
-)
+RETRY_CONFIG_DEFAULT = RetryConfig(max_retries=5, backoff_base=2.0, backoff_factor=1.0)
 
-RETRY_CONFIG_CONSERVATIVE = RetryConfig(
-    max_retries=7,
-    backoff_base=2.0,
-    backoff_factor=2.0
-)
+RETRY_CONFIG_CONSERVATIVE = RetryConfig(max_retries=7, backoff_base=2.0, backoff_factor=2.0)
 
 
 def retry_on_rate_limit(max_retries: int = 3):
@@ -179,7 +169,7 @@ def retry_on_rate_limit(max_retries: int = 3):
                         raise
 
                     # Exponential backoff for rate limits
-                    backoff_time = 2 ** attempt
+                    backoff_time = 2**attempt
                     logger.warning(
                         f"Rate limit hit. Retrying in {backoff_time}s... "
                         f"(attempt {attempt + 1}/{max_retries})"
@@ -190,6 +180,7 @@ def retry_on_rate_limit(max_retries: int = 3):
             raise RuntimeError("Retry logic error")
 
         return wrapper
+
     return decorator
 
 

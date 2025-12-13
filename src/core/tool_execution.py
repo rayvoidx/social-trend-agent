@@ -40,5 +40,3 @@ def tool_chat(
         tool_choice=tool_choice,
         **kwargs,
     )
-
-

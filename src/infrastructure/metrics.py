@@ -9,6 +9,7 @@
 - 품질 메트릭 수집
 - 성능 이력 관리
 """
+
 import time
 import psutil
 import json
@@ -24,6 +25,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class PerformanceMetrics:
     """단일 에이전트 실행의 성능 메트릭"""
+
     run_id: str
     agent_name: str
     query: str
@@ -133,8 +135,9 @@ class PerformanceMonitor:
                 pass
             ```
         """
+
         class NodeTracker:
-            def __init__(self, monitor: 'PerformanceMonitor', name: str):
+            def __init__(self, monitor: "PerformanceMonitor", name: str):
                 self.monitor = monitor
                 self.name = name
 
@@ -174,10 +177,7 @@ class PerformanceMonitor:
         self.items_analyzed = items_count
 
     def record_quality_metrics(
-        self,
-        coverage: float = 0.0,
-        factuality: float = 0.0,
-        actionability: float = 0.0
+        self, coverage: float = 0.0, factuality: float = 0.0, actionability: float = 0.0
     ):
         """
         품질 메트릭 기록
@@ -232,7 +232,7 @@ class PerformanceMonitor:
             node_timings=self.node_timings,
             error_count=self.error_count,
             retry_count=self.retry_count,
-            partial_completion=self.partial_completion
+            partial_completion=self.partial_completion,
         )
 
         logger.info(
@@ -337,23 +337,27 @@ class MetricsAggregator:
                 "min": min(durations),
                 "max": max(durations),
                 "p50": sorted(durations)[len(durations) // 2],
-                "p95": sorted(durations)[int(len(durations) * 0.95)] if len(durations) > 20 else max(durations)
+                "p95": (
+                    sorted(durations)[int(len(durations) * 0.95)]
+                    if len(durations) > 20
+                    else max(durations)
+                ),
             },
             "memory": {
                 "mean": sum(memories) / len(memories),
                 "min": min(memories),
                 "max": max(memories),
-                "peak": max(memories)
+                "peak": max(memories),
             },
             "quality": {
                 "coverage_mean": sum(coverages) / len(coverages),
-                "factuality_mean": sum(factualities) / len(factualities)
+                "factuality_mean": sum(factualities) / len(factualities),
             },
             "errors": {
                 "total_errors": sum(m.error_count for m in metrics_list),
                 "total_retries": sum(m.retry_count for m in metrics_list),
-                "partial_completions": sum(1 for m in metrics_list if m.partial_completion)
-            }
+                "partial_completions": sum(1 for m in metrics_list if m.partial_completion),
+            },
         }
 
         return stats
@@ -398,7 +402,7 @@ class MetricsAggregator:
             f"- 총 에러 수: {stats['errors']['total_errors']}",
             f"- 총 재시도 수: {stats['errors']['total_retries']}",
             f"- 부분 완료: {stats['errors']['partial_completions']}",
-            f""
+            f"",
         ]
 
         return "\n".join(report_lines)

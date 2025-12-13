@@ -6,6 +6,7 @@ Provides:
 - Automatic metrics collection
 - Rate limiting per IP/API key
 """
+
 from __future__ import annotations
 
 import logging
@@ -31,6 +32,7 @@ logger = logging.getLogger(__name__)
 # =============================================================================
 # Logging Middleware
 # =============================================================================
+
 
 class LoggingMiddleware(BaseHTTPMiddleware):
     """
@@ -62,7 +64,7 @@ class LoggingMiddleware(BaseHTTPMiddleware):
                 "path": path,
                 "client_ip": client_ip,
                 "user_agent": user_agent,
-            }
+            },
         )
 
         try:
@@ -79,7 +81,7 @@ class LoggingMiddleware(BaseHTTPMiddleware):
                     "run_id": run_id,
                     "error": str(e),
                     "error_type": type(e).__name__,
-                }
+                },
             )
             raise
 
@@ -98,15 +100,12 @@ class LoggingMiddleware(BaseHTTPMiddleware):
                     "status_code": status_code,
                     "duration_ms": round(duration * 1000, 2),
                     "success": success,
-                }
+                },
             )
 
             # Record metrics
             record_api_request(
-                service="api",
-                endpoint=path,
-                duration_seconds=duration,
-                success=success
+                service="api", endpoint=path, duration_seconds=duration, success=success
             )
 
         # Add run_id to response headers
@@ -136,6 +135,7 @@ class LoggingMiddleware(BaseHTTPMiddleware):
 # =============================================================================
 # Metrics Middleware
 # =============================================================================
+
 
 class MetricsMiddleware(BaseHTTPMiddleware):
     """
@@ -200,6 +200,7 @@ class MetricsMiddleware(BaseHTTPMiddleware):
 # Rate Limiting Middleware
 # =============================================================================
 
+
 class RateLimitConfig:
     """Rate limiting configuration."""
 
@@ -257,14 +258,8 @@ class RateLimiter:
         now = time.time()
 
         # Clean old entries and count
-        minute_count = self._count_requests(
-            self._minute_buckets[identifier],
-            now - 60
-        )
-        hour_count = self._count_requests(
-            self._hour_buckets[identifier],
-            now - 3600
-        )
+        minute_count = self._count_requests(self._minute_buckets[identifier], now - 60)
+        hour_count = self._count_requests(self._hour_buckets[identifier], now - 3600)
 
         # Check limits
         if minute_count >= self.config.requests_per_minute:
@@ -273,7 +268,7 @@ class RateLimiter:
                 "limit": "minute",
                 "current": minute_count,
                 "max": self.config.requests_per_minute,
-                "retry_after": max(1, int(retry_after))
+                "retry_after": max(1, int(retry_after)),
             }
 
         if hour_count >= self.config.requests_per_hour:
@@ -282,7 +277,7 @@ class RateLimiter:
                 "limit": "hour",
                 "current": hour_count,
                 "max": self.config.requests_per_hour,
-                "retry_after": max(1, int(retry_after))
+                "retry_after": max(1, int(retry_after)),
             }
 
         # Record request
@@ -291,7 +286,7 @@ class RateLimiter:
 
         return True, {
             "minute_remaining": self.config.requests_per_minute - minute_count - 1,
-            "hour_remaining": self.config.requests_per_hour - hour_count - 1
+            "hour_remaining": self.config.requests_per_hour - hour_count - 1,
         }
 
     def _count_requests(self, bucket: list, cutoff: float) -> int:
@@ -306,27 +301,21 @@ class RateLimiter:
         """Get current stats for an identifier."""
         now = time.time()
 
-        minute_count = self._count_requests(
-            self._minute_buckets[identifier],
-            now - 60
-        )
-        hour_count = self._count_requests(
-            self._hour_buckets[identifier],
-            now - 3600
-        )
+        minute_count = self._count_requests(self._minute_buckets[identifier], now - 60)
+        hour_count = self._count_requests(self._hour_buckets[identifier], now - 3600)
 
         return {
             "identifier": identifier,
             "minute": {
                 "used": minute_count,
                 "limit": self.config.requests_per_minute,
-                "remaining": self.config.requests_per_minute - minute_count
+                "remaining": self.config.requests_per_minute - minute_count,
             },
             "hour": {
                 "used": hour_count,
                 "limit": self.config.requests_per_hour,
-                "remaining": self.config.requests_per_hour - hour_count
-            }
+                "remaining": self.config.requests_per_hour - hour_count,
+            },
         }
 
 
@@ -366,22 +355,19 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         if not allowed:
             # Record rate limit hit
             from .prometheus_metrics import record_api_request
+
             record_api_request(
                 service="api",
                 endpoint=request.url.path,
                 duration_seconds=0,
                 success=False,
-                rate_limited=True
+                rate_limited=True,
             )
 
             # Log
             logger.warning(
                 f"Rate limit exceeded",
-                extra={
-                    "identifier": identifier,
-                    "path": request.url.path,
-                    "info": info
-                }
+                extra={"identifier": identifier, "path": request.url.path, "info": info},
             )
 
             return JSONResponse(
@@ -389,13 +375,13 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                 content={
                     "error": "Too Many Requests",
                     "message": f"Rate limit exceeded ({info.get('limit', 'unknown')} limit)",
-                    "retry_after": info.get("retry_after", 60)
+                    "retry_after": info.get("retry_after", 60),
                 },
                 headers={
                     "Retry-After": str(info.get("retry_after", 60)),
                     "X-RateLimit-Limit": str(info.get("max", 0)),
-                    "X-RateLimit-Remaining": "0"
-                }
+                    "X-RateLimit-Remaining": "0",
+                },
             )
 
         # Process request
@@ -415,7 +401,9 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
         # By API key
         if self.config.by_api_key:
-            api_key = request.headers.get("x-api-key") or request.headers.get("authorization", "").replace("Bearer ", "")
+            api_key = request.headers.get("x-api-key") or request.headers.get(
+                "authorization", ""
+            ).replace("Bearer ", "")
             if api_key:
                 identifiers.append(f"key:{api_key[:8]}")
 
@@ -445,6 +433,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 # =============================================================================
 # Structured Logging Setup
 # =============================================================================
+
 
 class JSONFormatter(logging.Formatter):
     """JSON log formatter for structured logging."""
@@ -484,10 +473,7 @@ class JSONFormatter(logging.Formatter):
         return json.dumps(log_data)
 
 
-def setup_structured_logging(
-    level: str = "INFO",
-    json_format: bool = True
-):
+def setup_structured_logging(level: str = "INFO", json_format: bool = True):
     """Set up structured logging for the application."""
     root_logger = logging.getLogger()
     root_logger.setLevel(getattr(logging, level.upper()))
@@ -502,9 +488,7 @@ def setup_structured_logging(
         handler.setFormatter(JSONFormatter())
     else:
         handler.setFormatter(
-            logging.Formatter(
-                "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-            )
+            logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
         )
 
     root_logger.addHandler(handler)
@@ -516,12 +500,13 @@ def setup_structured_logging(
 # FastAPI Setup Helper
 # =============================================================================
 
+
 def setup_middleware(
     app,
     enable_logging: bool = True,
     enable_metrics: bool = True,
     enable_rate_limit: bool = True,
-    rate_limit_config: Optional[RateLimitConfig] = None
+    rate_limit_config: Optional[RateLimitConfig] = None,
 ):
     """
     Set up all middleware for a FastAPI app.
@@ -534,10 +519,7 @@ def setup_middleware(
         rate_limit_config: Custom rate limit configuration
     """
     if enable_rate_limit:
-        app.add_middleware(
-            RateLimitMiddleware,
-            config=rate_limit_config or RateLimitConfig()
-        )
+        app.add_middleware(RateLimitMiddleware, config=rate_limit_config or RateLimitConfig())
 
     if enable_metrics:
         app.add_middleware(MetricsMiddleware)
@@ -550,6 +532,6 @@ def setup_middleware(
         extra={
             "logging": enable_logging,
             "metrics": enable_metrics,
-            "rate_limit": enable_rate_limit
-        }
+            "rate_limit": enable_rate_limit,
+        },
     )

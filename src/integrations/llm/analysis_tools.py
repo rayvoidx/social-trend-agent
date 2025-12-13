@@ -8,6 +8,7 @@ LLM 기반 분석 도구
 - 인사이트 생성
 - Self-Refine 루프
 """
+
 from __future__ import annotations
 
 import json
@@ -51,10 +52,9 @@ class AnalysisResult:
 # Sentiment Analysis
 # =============================================================================
 
+
 def analyze_sentiment_llm(
-    texts: List[str],
-    language: str = "ko",
-    detailed: bool = True
+    texts: List[str], language: str = "ko", detailed: bool = True
 ) -> Dict[str, Any]:
     """
     LLM 기반 감성 분석.
@@ -105,8 +105,11 @@ Analyze carefully considering context, sarcasm, and nuance."""
         client = get_llm_client()
         response = client.chat_json(
             messages=[
-                {"role": "system", "content": "You are an expert sentiment analyst. Provide accurate, nuanced sentiment analysis."},
-                {"role": "user", "content": prompt}
+                {
+                    "role": "system",
+                    "content": "You are an expert sentiment analyst. Provide accurate, nuanced sentiment analysis.",
+                },
+                {"role": "user", "content": prompt},
             ],
             temperature=0.3,
         )
@@ -125,7 +128,9 @@ Analyze carefully considering context, sarcasm, and nuance."""
             "sample_size": len(sample_texts),
         }
 
-        logger.info(f"Sentiment analysis complete: {result['overall']} ({result['confidence']:.2f})")
+        logger.info(
+            f"Sentiment analysis complete: {result['overall']} ({result['confidence']:.2f})"
+        )
         return result
 
     except Exception as e:
@@ -167,10 +172,9 @@ def _fallback_sentiment_analysis(texts: List[str]) -> Dict[str, Any]:
 # Keyword Extraction
 # =============================================================================
 
+
 def extract_keywords_llm(
-    texts: List[str],
-    max_keywords: int = 20,
-    language: str = "ko"
+    texts: List[str], max_keywords: int = 20, language: str = "ko"
 ) -> List[Dict[str, Any]]:
     """
     LLM 기반 키워드 추출.
@@ -217,8 +221,11 @@ Sort by relevance score descending."""
         client = get_llm_client()
         response = client.chat_json(
             messages=[
-                {"role": "system", "content": "You are an expert at extracting meaningful keywords from text."},
-                {"role": "user", "content": prompt}
+                {
+                    "role": "system",
+                    "content": "You are an expert at extracting meaningful keywords from text.",
+                },
+                {"role": "user", "content": prompt},
             ],
             temperature=0.3,
         )
@@ -232,10 +239,7 @@ Sort by relevance score descending."""
         return _fallback_keyword_extraction(texts, max_keywords)
 
 
-def _fallback_keyword_extraction(
-    texts: List[str],
-    max_keywords: int
-) -> List[Dict[str, Any]]:
+def _fallback_keyword_extraction(texts: List[str], max_keywords: int) -> List[Dict[str, Any]]:
     """폴백 키워드 추출 (빈도 기반)."""
     from collections import Counter
     import re
@@ -243,26 +247,44 @@ def _fallback_keyword_extraction(
     # Simple tokenization
     words = []
     for text in texts:
-        tokens = re.findall(r'\b\w+\b', text.lower())
+        tokens = re.findall(r"\b\w+\b", text.lower())
         words.extend([t for t in tokens if len(t) > 2])
 
     # Count and filter
     word_counts = Counter(words)
 
     # Remove common stopwords
-    stopwords = {"the", "a", "an", "is", "are", "was", "were", "and", "or", "but", "이", "그", "저", "것", "수"}
+    stopwords = {
+        "the",
+        "a",
+        "an",
+        "is",
+        "are",
+        "was",
+        "were",
+        "and",
+        "or",
+        "but",
+        "이",
+        "그",
+        "저",
+        "것",
+        "수",
+    }
     for sw in stopwords:
         word_counts.pop(sw, None)
 
     # Format result
     keywords = []
     for word, count in word_counts.most_common(max_keywords):
-        keywords.append({
-            "keyword": word,
-            "score": min(count / 10, 1.0),
-            "frequency": count,
-            "category": "general",
-        })
+        keywords.append(
+            {
+                "keyword": word,
+                "score": min(count / 10, 1.0),
+                "frequency": count,
+                "category": "general",
+            }
+        )
 
     return keywords
 
@@ -271,10 +293,9 @@ def _fallback_keyword_extraction(
 # Topic Clustering
 # =============================================================================
 
+
 def cluster_topics_llm(
-    texts: List[str],
-    num_topics: int = 5,
-    language: str = "ko"
+    texts: List[str], num_topics: int = 5, language: str = "ko"
 ) -> List[Dict[str, Any]]:
     """
     LLM 기반 토픽 클러스터링.
@@ -318,8 +339,11 @@ Provide topic names in {'Korean' if language == 'ko' else 'English'}."""
         client = get_llm_client()
         response = client.chat_json(
             messages=[
-                {"role": "system", "content": "You are an expert at identifying and clustering topics in text data."},
-                {"role": "user", "content": prompt}
+                {
+                    "role": "system",
+                    "content": "You are an expert at identifying and clustering topics in text data.",
+                },
+                {"role": "user", "content": prompt},
             ],
             temperature=0.4,
         )
@@ -337,6 +361,7 @@ Provide topic names in {'Korean' if language == 'ko' else 'English'}."""
 # Insight Generation
 # =============================================================================
 
+
 def generate_insights_llm(
     query: str,
     texts: List[str],
@@ -344,7 +369,7 @@ def generate_insights_llm(
     keywords: List[Dict[str, Any]],
     topics: List[Dict[str, Any]],
     language: str = "ko",
-    self_refine: bool = True
+    self_refine: bool = True,
 ) -> Dict[str, Any]:
     """
     LLM 기반 인사이트 생성.
@@ -414,8 +439,11 @@ Focus on actionable, specific, and evidence-based insights."""
         # Initial generation
         response = client.chat_json(
             messages=[
-                {"role": "system", "content": "You are a senior trend analyst providing actionable business insights."},
-                {"role": "user", "content": prompt}
+                {
+                    "role": "system",
+                    "content": "You are a senior trend analyst providing actionable business insights.",
+                },
+                {"role": "user", "content": prompt},
             ],
             temperature=0.5,
         )
@@ -440,9 +468,7 @@ Focus on actionable, specific, and evidence-based insights."""
 
 
 def _self_refine_insights(
-    initial_response: Dict[str, Any],
-    query: str,
-    language: str
+    initial_response: Dict[str, Any], query: str, language: str
 ) -> Dict[str, Any]:
     """
     Self-Refine 루프로 인사이트 품질 개선.
@@ -476,8 +502,11 @@ Evaluate on these criteria and provide improvement suggestions:
     try:
         evaluation = client.chat_json(
             messages=[
-                {"role": "system", "content": "You are a quality assurance expert for business insights."},
-                {"role": "user", "content": eval_prompt}
+                {
+                    "role": "system",
+                    "content": "You are a quality assurance expert for business insights.",
+                },
+                {"role": "user", "content": eval_prompt},
             ],
             temperature=0.3,
         )
@@ -504,8 +533,11 @@ Generate an improved version maintaining the same JSON structure.
 
         refined = client.chat_json(
             messages=[
-                {"role": "system", "content": "You are refining business insights for higher quality."},
-                {"role": "user", "content": refine_prompt}
+                {
+                    "role": "system",
+                    "content": "You are refining business insights for higher quality.",
+                },
+                {"role": "user", "content": refine_prompt},
             ],
             temperature=0.4,
         )
@@ -522,11 +554,9 @@ Generate an improved version maintaining the same JSON structure.
 # Combined Analysis
 # =============================================================================
 
+
 def analyze_texts_comprehensive(
-    query: str,
-    texts: List[str],
-    language: str = "ko",
-    include_recommendations: bool = True
+    query: str, texts: List[str], language: str = "ko", include_recommendations: bool = True
 ) -> AnalysisResult:
     """
     종합 텍스트 분석.
@@ -551,9 +581,7 @@ def analyze_texts_comprehensive(
 
     insights_data = {}
     if include_recommendations:
-        insights_data = generate_insights_llm(
-            query, texts, sentiment, keywords, topics, language
-        )
+        insights_data = generate_insights_llm(query, texts, sentiment, keywords, topics, language)
 
     # Build result
     result = AnalysisResult(
@@ -562,9 +590,7 @@ def analyze_texts_comprehensive(
         topics=topics,
         summary=insights_data.get("summary", ""),
         insights=insights_data.get("key_findings", []),
-        recommendations=[
-            rec.get("action", "") for rec in insights_data.get("recommendations", [])
-        ],
+        recommendations=[rec.get("action", "") for rec in insights_data.get("recommendations", [])],
         confidence=sentiment.get("confidence", 0.7),
         model="llm_comprehensive",
     )

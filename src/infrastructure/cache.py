@@ -1,6 +1,7 @@
 """
 API 응답 및 비용이 큰 연산을 위한 캐싱 유틸리티
 """
+
 import time
 import hashlib
 import json
@@ -90,10 +91,10 @@ class DiskCache:
             return None
 
         try:
-            with open(cache_path, 'rb') as f:
+            with open(cache_path, "rb") as f:
                 data = pickle.load(f)
 
-            value, expiry = data['value'], data['expiry']
+            value, expiry = data["value"], data["expiry"]
 
             if time.time() > expiry:
                 # Expired, remove file
@@ -117,8 +118,8 @@ class DiskCache:
         expiry = time.time() + ttl
 
         try:
-            with open(cache_path, 'wb') as f:
-                pickle.dump({'value': value, 'expiry': expiry}, f)
+            with open(cache_path, "wb") as f:
+                pickle.dump({"value": value, "expiry": expiry}, f)
 
             logger.debug(f"Disk cache set: {key} (TTL: {ttl}s)")
 
@@ -137,11 +138,7 @@ _memory_cache = SimpleCache(default_ttl=3600)  # 1 hour
 _disk_cache = DiskCache(cache_dir=".cache/agents", default_ttl=86400)  # 24 hours
 
 
-def cached(
-    ttl: int = 3600,
-    use_disk: bool = False,
-    key_func: Optional[Callable] = None
-):
+def cached(ttl: int = 3600, use_disk: bool = False, key_func: Optional[Callable] = None):
     """
     함수 결과를 캐싱하는 데코레이터
 
@@ -156,6 +153,7 @@ def cached(
             # ... 비용이 큰 연산 ...
             return result
     """
+
     def decorator(func: Callable) -> Callable:
         cache = _disk_cache if use_disk else _memory_cache
 
@@ -186,9 +184,10 @@ def cached(
 
         # Add cache management methods
         wrapper.cache_clear = cache.clear
-        wrapper.cache_size = cache.size if hasattr(cache, 'size') else lambda: 0
+        wrapper.cache_size = cache.size if hasattr(cache, "size") else lambda: 0
 
         return wrapper
+
     return decorator
 
 

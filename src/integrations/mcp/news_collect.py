@@ -86,12 +86,7 @@ def search_news_via_mcp(
         return []
 
     # 기사 리스트 후보 키들
-    articles = (
-        result.get("articles")
-        or result.get("items")
-        or result.get("results")
-        or []
-    )
+    articles = result.get("articles") or result.get("items") or result.get("results") or []
 
     out: List[Dict[str, Any]] = []
     for a in articles[:max_results]:

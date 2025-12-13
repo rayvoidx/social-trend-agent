@@ -81,5 +81,3 @@ def get_model_for_role(agent_name: str, role: ModelRole) -> Optional[str]:
         ModelRole.TOOL: os.getenv("OPENAI_MODEL_NAME", "gpt-5-mini"),
     }
     return defaults.get(role)
-
-

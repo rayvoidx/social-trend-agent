@@ -245,12 +245,19 @@ def get_system_prompt() -> str:
     return SYSTEM_PROMPT
 
 
-def get_summarize_prompt(query: str, time_window: str, item_count: int, 
-                         positive: float, neutral: float, negative: float,
-                         keywords: list, news_items: str) -> str:
+def get_summarize_prompt(
+    query: str,
+    time_window: str,
+    item_count: int,
+    positive: float,
+    neutral: float,
+    negative: float,
+    keywords: list,
+    news_items: str,
+) -> str:
     """요약 프롬프트 생성"""
     keywords_str = "\n".join([f"- {kw}" for kw in keywords[:10]])
-    
+
     return SUMMARIZE_PROMPT_TEMPLATE.format(
         query=query,
         time_window=time_window,
@@ -259,7 +266,7 @@ def get_summarize_prompt(query: str, time_window: str, item_count: int,
         neutral=neutral,
         negative=negative,
         keywords=keywords_str,
-        news_items=news_items
+        news_items=news_items,
     )
 
 
@@ -271,4 +278,3 @@ def get_analyze_prompt(news_items: str) -> str:
 def get_few_shot_examples() -> list:
     """Few-Shot 예제 반환"""
     return [FEW_SHOT_EXAMPLE_1, FEW_SHOT_EXAMPLE_2]
-

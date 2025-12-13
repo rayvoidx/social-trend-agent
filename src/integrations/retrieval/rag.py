@@ -1,6 +1,7 @@
 """
 Common RAG Module
 """
+
 import logging
 from typing import List, Dict, Any, Optional, Tuple
 import hashlib
@@ -82,7 +83,7 @@ def _rerank_hybrid(
 class RAGSystem:
     """
     설정 기반 RAG 시스템
-    
+
     에이전트별 설정을 읽어 적절한 벡터 저장소와 임베딩 모델을 사용합니다.
     """
 
@@ -90,11 +91,11 @@ class RAGSystem:
         self.agent_name = agent_name
         self.cfg = config_manager or get_config_manager()
         self.agent_cfg = self.cfg.get_agent_config(agent_name)
-        
+
         self.vector_store = None
         self.llm_client = get_llm_client()
         self.enabled = False
-        
+
         self._initialize()
 
     def _initialize(self):
@@ -105,23 +106,22 @@ class RAGSystem:
 
         vs_cfg = self.agent_cfg.vector_store or {}
         vs_type = vs_cfg.get("type")
-        
+
         if vs_type == "pinecone":
             index_name = vs_cfg.get("index_name")
             if not index_name:
                 logger.warning(f"Pinecone index name missing for {self.agent_name}")
                 return
-                
+
             try:
                 # 네임스페이스는 에이전트 이름을 기본값으로 사용
                 namespace = vs_cfg.get("namespace", self.agent_name)
-                
-                self.vector_store = PineconeVectorStore(
-                    index_name=index_name,
-                    namespace=namespace
-                )
+
+                self.vector_store = PineconeVectorStore(index_name=index_name, namespace=namespace)
                 self.enabled = True
-                logger.info(f"RAG initialized for {self.agent_name}: Pinecone(index={index_name}, ns={namespace})")
+                logger.info(
+                    f"RAG initialized for {self.agent_name}: Pinecone(index={index_name}, ns={namespace})"
+                )
             except Exception as e:
                 logger.error(f"Failed to initialize Pinecone for {self.agent_name}: {e}")
         else:
@@ -131,24 +131,24 @@ class RAGSystem:
     def index_documents(self, documents: List[str], metadatas: List[Dict[str, Any]]) -> int:
         """
         문서를 임베딩하여 벡터 스토어에 저장
-        
+
         Args:
             documents: 텍스트 리스트
             metadatas: 메타데이터 리스트
-            
+
         Returns:
             저장된 문서 수
         """
         if not self.enabled or not self.vector_store:
             return 0
-            
+
         try:
             # Generate IDs
             ids = [self._generate_id(doc) for doc in documents]
-            
+
             # Get embeddings
             embeddings = self.llm_client.get_embeddings_batch(documents)
-            
+
             # GraphRAG simulation: add lightweight entities to metadata (Pinecone supports list[str])
             enriched: List[Dict[str, Any]] = []
             for doc, meta in zip(documents, metadatas):
@@ -171,21 +171,21 @@ class RAGSystem:
     def retrieve(self, query: str, top_k: int = 10, use_graph: bool = True) -> List[Dict[str, Any]]:
         """
         쿼리와 관련된 문서 검색
-        
+
         Args:
             query: 검색 쿼리
             top_k: 반환할 결과 수
-            
+
         Returns:
             검색된 문서의 메타데이터 리스트
         """
         if not self.enabled or not self.vector_store:
             return []
-            
+
         try:
             # Get query embedding
             query_vector = self.llm_client.get_embedding(query)
-            
+
             # Search (get a wider pool for rerank)
             pool_k = max(top_k, min(50, top_k * 3))
             matches = self.vector_store.query(query_vector, top_k=pool_k)
@@ -204,4 +204,3 @@ class RAGSystem:
 
     def is_enabled(self) -> bool:
         return self.enabled
-

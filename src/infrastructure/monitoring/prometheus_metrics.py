@@ -9,6 +9,7 @@ Provides metrics for:
 
 Falls back to simple in-memory metrics if prometheus_client is not installed.
 """
+
 from __future__ import annotations
 
 import logging
@@ -29,6 +30,7 @@ try:
         multiprocess,
         REGISTRY,
     )
+
     PROMETHEUS_AVAILABLE = True
 except ImportError:
     PROMETHEUS_AVAILABLE = False
@@ -39,6 +41,7 @@ logger = logging.getLogger(__name__)
 # =============================================================================
 # Simple In-Memory Metrics (Fallback)
 # =============================================================================
+
 
 class SimpleMetric:
     def __init__(self, name: str, documentation: str, labelnames: Optional[List[str]] = None):
@@ -52,6 +55,7 @@ class SimpleMetric:
 
     def labels(self, **kwargs):
         return SimpleMetricLabel(self, kwargs)
+
 
 class SimpleMetricLabel:
     def __init__(self, parent: SimpleMetric, labels: Dict[str, str]):
@@ -74,14 +78,18 @@ class SimpleMetricLabel:
             self.parent._samples[self.key] = 0.0
         self.parent._samples[self.key] += value
 
+
 class SimpleCounter(SimpleMetric):
     pass
+
 
 class SimpleGauge(SimpleMetric):
     pass
 
+
 class SimpleHistogram(SimpleMetric):
     pass
+
 
 class SimpleInfo(SimpleMetric):
     def info(self, labels: Dict[str, str]):
@@ -91,6 +99,7 @@ class SimpleInfo(SimpleMetric):
 # =============================================================================
 # Metrics Registry
 # =============================================================================
+
 
 class MetricsRegistry:
     """Central registry for all application metrics."""
@@ -109,12 +118,12 @@ class MetricsRegistry:
 
         self._initialized = True
         self._metrics: Dict[str, Any] = {}
-        
+
         self._init_metrics()
 
     def _init_metrics(self):
         """Initialize all metrics."""
-        
+
         # Helper to create metrics based on availability
         def create_counter(name, doc, labels):
             if PROMETHEUS_AVAILABLE:
@@ -123,14 +132,18 @@ class MetricsRegistry:
 
         def create_histogram(name, doc, labels, buckets=None):
             if PROMETHEUS_AVAILABLE:
-                return Histogram(name, doc, labels, buckets=buckets) if buckets else Histogram(name, doc, labels)
+                return (
+                    Histogram(name, doc, labels, buckets=buckets)
+                    if buckets
+                    else Histogram(name, doc, labels)
+                )
             return SimpleHistogram(name, doc, labels)
-            
+
         def create_gauge(name, doc, labels):
             if PROMETHEUS_AVAILABLE:
                 return Gauge(name, doc, labels)
             return SimpleGauge(name, doc, labels)
-            
+
         def create_info(name, doc):
             if PROMETHEUS_AVAILABLE:
                 return Info(name, doc)
@@ -143,32 +156,28 @@ class MetricsRegistry:
         self._metrics["llm_requests_total"] = create_counter(
             "llm_requests_total",
             "Total number of LLM API requests",
-            ["provider", "model", "status"]
+            ["provider", "model", "status"],
         )
 
         self._metrics["llm_request_duration_seconds"] = create_histogram(
             "llm_request_duration_seconds",
             "LLM API request duration in seconds",
             ["provider", "model"],
-            buckets=(0.1, 0.5, 1.0, 2.0, 5.0, 10.0, 30.0, 60.0)
+            buckets=(0.1, 0.5, 1.0, 2.0, 5.0, 10.0, 30.0, 60.0),
         )
 
         self._metrics["llm_tokens_total"] = create_counter(
-            "llm_tokens_total",
-            "Total number of tokens used",
-            ["provider", "model", "token_type"]
+            "llm_tokens_total", "Total number of tokens used", ["provider", "model", "token_type"]
         )
 
         self._metrics["llm_cost_total"] = create_counter(
-            "llm_cost_total",
-            "Total cost of LLM API calls in USD",
-            ["provider", "model"]
+            "llm_cost_total", "Total cost of LLM API calls in USD", ["provider", "model"]
         )
 
         self._metrics["llm_errors_total"] = create_counter(
             "llm_errors_total",
             "Total number of LLM API errors",
-            ["provider", "model", "error_type"]
+            ["provider", "model", "error_type"],
         )
 
         # =====================================================================
@@ -178,20 +187,18 @@ class MetricsRegistry:
         self._metrics["api_requests_total"] = create_counter(
             "api_requests_total",
             "Total number of external API requests",
-            ["service", "endpoint", "status"]
+            ["service", "endpoint", "status"],
         )
 
         self._metrics["api_request_duration_seconds"] = create_histogram(
             "api_request_duration_seconds",
             "External API request duration in seconds",
             ["service", "endpoint"],
-            buckets=(0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0)
+            buckets=(0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0),
         )
 
         self._metrics["api_rate_limit_hits"] = create_counter(
-            "api_rate_limit_hits_total",
-            "Number of rate limit hits",
-            ["service"]
+            "api_rate_limit_hits_total", "Number of rate limit hits", ["service"]
         )
 
         # =====================================================================
@@ -199,22 +206,18 @@ class MetricsRegistry:
         # =====================================================================
 
         self._metrics["agent_runs_total"] = create_counter(
-            "agent_runs_total",
-            "Total number of agent executions",
-            ["agent_name", "status"]
+            "agent_runs_total", "Total number of agent executions", ["agent_name", "status"]
         )
 
         self._metrics["agent_run_duration_seconds"] = create_histogram(
             "agent_run_duration_seconds",
             "Agent execution duration in seconds",
             ["agent_name"],
-            buckets=(1.0, 5.0, 10.0, 30.0, 60.0, 120.0, 300.0)
+            buckets=(1.0, 5.0, 10.0, 30.0, 60.0, 120.0, 300.0),
         )
 
         self._metrics["agent_steps_total"] = create_counter(
-            "agent_steps_total",
-            "Total number of agent steps executed",
-            ["agent_name", "step_name"]
+            "agent_steps_total", "Total number of agent steps executed", ["agent_name", "step_name"]
         )
 
         # =====================================================================
@@ -224,21 +227,21 @@ class MetricsRegistry:
         self._metrics["vector_operations_total"] = create_counter(
             "vector_operations_total",
             "Total vector store operations",
-            ["operation", "namespace", "status"]
+            ["operation", "namespace", "status"],
         )
 
         self._metrics["vector_operation_duration_seconds"] = create_histogram(
             "vector_operation_duration_seconds",
             "Vector store operation duration",
             ["operation", "namespace"],
-            buckets=(0.01, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5)
+            buckets=(0.01, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5),
         )
 
         self._metrics["retrieval_results_count"] = create_histogram(
             "retrieval_results_count",
             "Number of results returned from retrieval",
             ["namespace"],
-            buckets=(0, 1, 5, 10, 20, 50, 100)
+            buckets=(0, 1, 5, 10, 20, 50, 100),
         )
 
         # =====================================================================
@@ -246,15 +249,11 @@ class MetricsRegistry:
         # =====================================================================
 
         self._metrics["cache_operations_total"] = create_counter(
-            "cache_operations_total",
-            "Total cache operations",
-            ["operation", "status"]
+            "cache_operations_total", "Total cache operations", ["operation", "status"]
         )
 
         self._metrics["cache_hit_ratio"] = create_gauge(
-            "cache_hit_ratio",
-            "Cache hit ratio",
-            ["cache_name"]
+            "cache_hit_ratio", "Cache hit ratio", ["cache_name"]
         )
 
         # =====================================================================
@@ -262,22 +261,20 @@ class MetricsRegistry:
         # =====================================================================
 
         self._metrics["workflow_items_total"] = create_counter(
-            "workflow_items_total",
-            "Total workflow items created",
-            ["item_type", "status"]
+            "workflow_items_total", "Total workflow items created", ["item_type", "status"]
         )
 
         self._metrics["workflow_transitions_total"] = create_counter(
             "workflow_transitions_total",
             "Total workflow state transitions",
-            ["from_status", "to_status"]
+            ["from_status", "to_status"],
         )
 
         self._metrics["workflow_review_duration_seconds"] = create_histogram(
             "workflow_review_duration_seconds",
             "Time spent in review",
             ["item_type"],
-            buckets=(60, 300, 900, 1800, 3600, 7200, 14400)
+            buckets=(60, 300, 900, 1800, 3600, 7200, 14400),
         )
 
         # =====================================================================
@@ -285,21 +282,15 @@ class MetricsRegistry:
         # =====================================================================
 
         self._metrics["items_collected_total"] = create_counter(
-            "items_collected_total",
-            "Total items collected from sources",
-            ["source", "item_type"]
+            "items_collected_total", "Total items collected from sources", ["source", "item_type"]
         )
 
         self._metrics["items_processed_total"] = create_counter(
-            "items_processed_total",
-            "Total items processed",
-            ["stage", "status"]
+            "items_processed_total", "Total items processed", ["stage", "status"]
         )
 
         self._metrics["duplicates_detected_total"] = create_counter(
-            "duplicates_detected_total",
-            "Total duplicate items detected",
-            ["source"]
+            "duplicates_detected_total", "Total duplicate items detected", ["source"]
         )
 
         # =====================================================================
@@ -307,22 +298,15 @@ class MetricsRegistry:
         # =====================================================================
 
         self._metrics["active_jobs"] = create_gauge(
-            "active_jobs",
-            "Number of active jobs",
-            ["job_type"]
+            "active_jobs", "Number of active jobs", ["job_type"]
         )
 
         self._metrics["queue_size"] = create_gauge(
-            "queue_size",
-            "Size of processing queues",
-            ["queue_name"]
+            "queue_size", "Size of processing queues", ["queue_name"]
         )
 
         # App info
-        self._metrics["app_info"] = create_info(
-            "app",
-            "Application information"
-        )
+        self._metrics["app_info"] = create_info("app", "Application information")
 
         logger.info(f"Metrics initialized (Prometheus available: {PROMETHEUS_AVAILABLE})")
 
@@ -337,7 +321,7 @@ class MetricsRegistry:
         """
         snapshot = {}
         if PROMETHEUS_AVAILABLE:
-            # Note: Extracting values from prometheus_client is not straightforward programmatically 
+            # Note: Extracting values from prometheus_client is not straightforward programmatically
             # without parsing the expose text. For now, we return empty if using real Prometheus
             # assuming the user uses /metrics endpoint.
             # To implement this properly for logging, we'd need to access internal registry samples.
@@ -375,6 +359,7 @@ def get_metrics_registry() -> MetricsRegistry:
 # Metric Helper Functions
 # =============================================================================
 
+
 def record_llm_request(
     provider: str,
     model: str,
@@ -383,7 +368,7 @@ def record_llm_request(
     output_tokens: int,
     cost_usd: float,
     success: bool = True,
-    error_type: Optional[str] = None
+    error_type: Optional[str] = None,
 ):
     """Record metrics for an LLM request."""
     registry = get_metrics_registry()
@@ -422,7 +407,7 @@ def record_api_request(
     endpoint: str,
     duration_seconds: float,
     success: bool = True,
-    rate_limited: bool = False
+    rate_limited: bool = False,
 ):
     """Record metrics for an external API request."""
     registry = get_metrics_registry()
@@ -449,7 +434,7 @@ def record_agent_run(
     agent_name: str,
     duration_seconds: float,
     success: bool = True,
-    steps: Optional[Dict[str, int]] = None
+    steps: Optional[Dict[str, int]] = None,
 ):
     """Record metrics for an agent run."""
     registry = get_metrics_registry()
@@ -478,7 +463,7 @@ def record_vector_operation(
     namespace: str,
     duration_seconds: float,
     success: bool = True,
-    results_count: int = 0
+    results_count: int = 0,
 ):
     """Record metrics for vector store operations."""
     registry = get_metrics_registry()
@@ -501,10 +486,7 @@ def record_vector_operation(
             results_hist.labels(namespace=namespace).observe(results_count)
 
 
-def record_cache_operation(
-    operation: str,
-    hit: bool = False
-):
+def record_cache_operation(operation: str, hit: bool = False):
     """Record cache operation metrics."""
     registry = get_metrics_registry()
     status = "hit" if hit else "miss"
@@ -514,11 +496,7 @@ def record_cache_operation(
         counter.labels(operation=operation, status=status).inc()
 
 
-def record_workflow_transition(
-    from_status: str,
-    to_status: str,
-    item_type: str
-):
+def record_workflow_transition(from_status: str, to_status: str, item_type: str):
     """Record workflow state transition."""
     registry = get_metrics_registry()
     counter = registry.get_metric("workflow_transitions_total")
@@ -526,11 +504,7 @@ def record_workflow_transition(
         counter.labels(from_status=from_status, to_status=to_status).inc()
 
 
-def record_items_collected(
-    source: str,
-    item_type: str,
-    count: int = 1
-):
+def record_items_collected(source: str, item_type: str, count: int = 1):
     """Record collected items."""
     registry = get_metrics_registry()
     counter = registry.get_metric("items_collected_total")
@@ -559,19 +533,17 @@ def set_app_info(version: str, environment: str, **kwargs):
     registry = get_metrics_registry()
     info = registry.get_metric("app_info")
     if info:
-        info.info({
-            "version": version,
-            "environment": environment,
-            **kwargs
-        })
+        info.info({"version": version, "environment": environment, **kwargs})
 
 
 # =============================================================================
 # Decorators
 # =============================================================================
 
+
 def track_llm_call(provider: str, model: str):
     """Decorator to track LLM API calls."""
+
     def decorator(func: Callable) -> Callable:
         @wraps(func)
         def wrapper(*args, **kwargs):
@@ -608,15 +580,17 @@ def track_llm_call(provider: str, model: str):
                     output_tokens=output_tokens,
                     cost_usd=cost,
                     success=success,
-                    error_type=error_type
+                    error_type=error_type,
                 )
 
         return wrapper
+
     return decorator
 
 
 def track_api_call(service: str, endpoint: str):
     """Decorator to track external API calls."""
+
     def decorator(func: Callable) -> Callable:
         @wraps(func)
         def wrapper(*args, **kwargs):
@@ -642,15 +616,17 @@ def track_api_call(service: str, endpoint: str):
                     endpoint=endpoint,
                     duration_seconds=duration,
                     success=success,
-                    rate_limited=rate_limited
+                    rate_limited=rate_limited,
                 )
 
         return wrapper
+
     return decorator
 
 
 def track_agent_run(agent_name: str):
     """Decorator to track agent execution."""
+
     def decorator(func: Callable) -> Callable:
         @wraps(func)
         def wrapper(*args, **kwargs):
@@ -667,22 +643,15 @@ def track_agent_run(agent_name: str):
 
             finally:
                 duration = time.time() - start_time
-                record_agent_run(
-                    agent_name=agent_name,
-                    duration_seconds=duration,
-                    success=success
-                )
+                record_agent_run(agent_name=agent_name, duration_seconds=duration, success=success)
 
         return wrapper
+
     return decorator
 
 
 @contextmanager
-def track_operation(
-    operation_type: str,
-    labels: Dict[str, str],
-    metric_prefix: str = "custom"
-):
+def track_operation(operation_type: str, labels: Dict[str, str], metric_prefix: str = "custom"):
     """Context manager for tracking arbitrary operations."""
     start_time = time.time()
     success = True
@@ -696,17 +665,14 @@ def track_operation(
         duration = time.time() - start_time
         logger.debug(
             f"{operation_type} completed",
-            extra={
-                "duration": duration,
-                "success": success,
-                **labels
-            }
+            extra={"duration": duration, "success": success, **labels},
         )
 
 
 # =============================================================================
 # Metrics Export
 # =============================================================================
+
 
 def get_metrics() -> bytes:
     """Get metrics in Prometheus format."""
@@ -726,13 +692,14 @@ def get_metrics_content_type() -> str:
 
 class MetricsAggregator:
     """Simple aggregator for metrics compatibility"""
+
     def __init__(self):
         self.registry = get_metrics_registry()
-        
+
     def load_all_metrics(self, agent_name: str):
         # Implementation for compatibility
         return []
-        
+
     def compute_statistics(self, metrics_list):
         # Implementation for compatibility
         return {}

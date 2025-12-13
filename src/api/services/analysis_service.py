@@ -3,6 +3,7 @@ Python Analysis Microservice
 
 FastAPI 서비스로 Python의 강점(ML, NLP, LLM)을 TypeScript API Gateway에 제공
 """
+
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -10,11 +11,7 @@ from typing import List, Dict, Any
 import logging
 
 # Import from existing Python agent
-from src.agents.news_trend.tools import (
-    analyze_sentiment,
-    extract_keywords,
-    summarize_trend
-)
+from src.agents.news_trend.tools import analyze_sentiment, extract_keywords, summarize_trend
 from src.integrations.llm.llm_client import get_llm_client
 
 # Setup logging
@@ -25,7 +22,7 @@ logger = logging.getLogger(__name__)
 app = FastAPI(
     title="Python Analysis Service",
     description="High-performance ML/NLP analysis service for hybrid architecture",
-    version="1.0.0"
+    version="1.0.0",
 )
 
 # CORS (TypeScript API Gateway에서 호출)
@@ -40,6 +37,7 @@ app.add_middleware(
 # =============================================================================
 # Request/Response Models
 # =============================================================================
+
 
 class NewsItem(BaseModel):
     title: str
@@ -68,25 +66,23 @@ class SummarizeRequest(BaseModel):
 # Health Check
 # =============================================================================
 
+
 @app.get("/health")
 async def health_check():
     """헬스 체크"""
-    return {
-        "status": "healthy",
-        "service": "python-analysis",
-        "version": "1.0.0"
-    }
+    return {"status": "healthy", "service": "python-analysis", "version": "1.0.0"}
 
 
 # =============================================================================
 # Analysis Endpoints
 # =============================================================================
 
+
 @app.post("/api/analyze/sentiment")
 async def sentiment_analysis(request: SentimentRequest):
     """
     감성 분석
-    
+
     Python의 NLP 라이브러리를 활용한 고급 감성 분석
     (향후 Transformer 모델로 업그레이드 가능)
     """
@@ -104,7 +100,7 @@ async def sentiment_analysis(request: SentimentRequest):
 async def keyword_extraction(request: KeywordRequest):
     """
     키워드 추출
-    
+
     Python의 TF-IDF, Word2Vec 등을 활용한 키워드 추출
     """
     try:
@@ -121,7 +117,7 @@ async def keyword_extraction(request: KeywordRequest):
 async def summarization(request: SummarizeRequest):
     """
     LLM 기반 트렌드 요약
-    
+
     LangChain Python의 성숙한 생태계를 활용한 고급 요약
     """
     try:
@@ -129,7 +125,7 @@ async def summarization(request: SummarizeRequest):
         result = summarize_trend(
             query=request.query,
             normalized_items=request.normalized_items,
-            analysis=request.analysis
+            analysis=request.analysis,
         )
         logger.info(f"Summarization completed: {len(result)} chars")
         return {"summary": result}
@@ -142,26 +138,23 @@ async def summarization(request: SummarizeRequest):
 # Batch Analysis (대량 처리)
 # =============================================================================
 
+
 @app.post("/api/analyze/batch")
 async def batch_analysis(request: SentimentRequest):
     """
     배치 분석 (감성 + 키워드 + 요약 한 번에)
-    
+
     Python에서 모든 분석을 한 번에 처리하여 네트워크 오버헤드 감소
     """
     try:
         logger.info(f"Batch analysis started: {len(request.items)} items")
-        
+
         # 병렬 처리 (Python asyncio)
         sentiment = analyze_sentiment(request.items)
         keywords = extract_keywords(request.items)
-        
-        result = {
-            "sentiment": sentiment,
-            "keywords": keywords,
-            "total_items": len(request.items)
-        }
-        
+
+        result = {"sentiment": sentiment, "keywords": keywords, "total_items": len(request.items)}
+
         logger.info("Batch analysis completed")
         return result
     except Exception as e:
@@ -172,6 +165,7 @@ async def batch_analysis(request: SentimentRequest):
 # =============================================================================
 # Advanced ML Endpoints (향후 확장)
 # =============================================================================
+
 
 class MLPredictRequest(BaseModel):
     task: str  # "sentiment", "trend", "anomaly", "classification"
@@ -207,7 +201,7 @@ async def ml_prediction(request: MLPredictRequest):
         else:
             raise HTTPException(
                 status_code=400,
-                detail=f"Unknown task: {request.task}. Supported: sentiment, trend, anomaly, classification"
+                detail=f"Unknown task: {request.task}. Supported: sentiment, trend, anomaly, classification",
             )
 
     except HTTPException:
@@ -241,17 +235,20 @@ Return JSON format:
 
     result = client.chat_json(
         messages=[
-            {"role": "system", "content": "You are a sentiment analysis expert. Return valid JSON only."},
-            {"role": "user", "content": prompt}
+            {
+                "role": "system",
+                "content": "You are a sentiment analysis expert. Return valid JSON only.",
+            },
+            {"role": "user", "content": prompt},
         ],
-        temperature=0.2
+        temperature=0.2,
     )
 
     return {
         "task": "sentiment",
         "predictions": result.get("predictions", []),
         "summary": result.get("summary", {}),
-        "total_texts": len(texts)
+        "total_texts": len(texts),
     }
 
 
@@ -278,10 +275,13 @@ Return JSON format:
 
     result = client.chat_json(
         messages=[
-            {"role": "system", "content": "You are a trend analysis expert. Return valid JSON only."},
-            {"role": "user", "content": prompt}
+            {
+                "role": "system",
+                "content": "You are a trend analysis expert. Return valid JSON only.",
+            },
+            {"role": "user", "content": prompt},
         ],
-        temperature=0.3
+        temperature=0.3,
     )
 
     return {
@@ -290,7 +290,7 @@ Return JSON format:
         "predicted_trends": result.get("predicted_trends", []),
         "emerging_topics": result.get("emerging_topics", []),
         "declining_topics": result.get("declining_topics", []),
-        "forecast_summary": result.get("forecast_summary", "")
+        "forecast_summary": result.get("forecast_summary", ""),
     }
 
 
@@ -316,10 +316,13 @@ Return JSON format:
 
     result = client.chat_json(
         messages=[
-            {"role": "system", "content": "You are an anomaly detection expert. Return valid JSON only."},
-            {"role": "user", "content": prompt}
+            {
+                "role": "system",
+                "content": "You are an anomaly detection expert. Return valid JSON only.",
+            },
+            {"role": "user", "content": prompt},
         ],
-        temperature=0.2
+        temperature=0.2,
     )
 
     return {
@@ -327,7 +330,7 @@ Return JSON format:
         "anomalies": result.get("anomalies", []),
         "patterns": result.get("patterns", []),
         "overall_assessment": result.get("overall_assessment", ""),
-        "total_texts": len(texts)
+        "total_texts": len(texts),
     }
 
 
@@ -354,10 +357,13 @@ Return JSON format:
 
     result = client.chat_json(
         messages=[
-            {"role": "system", "content": "You are a text classification expert. Return valid JSON only."},
-            {"role": "user", "content": prompt}
+            {
+                "role": "system",
+                "content": "You are a text classification expert. Return valid JSON only.",
+            },
+            {"role": "user", "content": prompt},
         ],
-        temperature=0.2
+        temperature=0.2,
     )
 
     return {
@@ -365,7 +371,7 @@ Return JSON format:
         "categories": categories,
         "classifications": result.get("classifications", []),
         "category_distribution": result.get("category_distribution", {}),
-        "total_texts": len(texts)
+        "total_texts": len(texts),
     }
 
 
@@ -378,13 +384,12 @@ async def ml_training(request: MLTrainRequest):
     여기서는 Few-shot learning용 데이터 준비만 수행
     """
     try:
-        logger.info(f"ML training started: task={request.task}, samples={len(request.training_data)}")
+        logger.info(
+            f"ML training started: task={request.task}, samples={len(request.training_data)}"
+        )
 
         if len(request.training_data) < 3:
-            raise HTTPException(
-                status_code=400,
-                detail="At least 3 training samples required"
-            )
+            raise HTTPException(status_code=400, detail="At least 3 training samples required")
 
         # Validate training data
         validated_data = []
@@ -392,18 +397,14 @@ async def ml_training(request: MLTrainRequest):
             if "text" not in item or "label" not in item:
                 raise HTTPException(
                     status_code=400,
-                    detail="Each training sample must have 'text' and 'label' fields"
+                    detail="Each training sample must have 'text' and 'label' fields",
                 )
-            validated_data.append({
-                "text": item["text"][:1000],
-                "label": item["label"]
-            })
+            validated_data.append({"text": item["text"][:1000], "label": item["label"]})
 
         # Build few-shot prompt template
-        few_shot_examples = "\n".join([
-            f"Text: {item['text'][:200]}\nLabel: {item['label']}"
-            for item in validated_data[:5]
-        ])
+        few_shot_examples = "\n".join(
+            [f"Text: {item['text'][:200]}\nLabel: {item['label']}" for item in validated_data[:5]]
+        )
 
         # Test the few-shot learning
         client = get_llm_client()
@@ -416,11 +417,7 @@ Text: {validated_data[-1]['text'][:200]}
 Label:"""
 
         test_result = client.chat(
-            messages=[
-                {"role": "user", "content": test_prompt}
-            ],
-            temperature=0.1,
-            max_tokens=50
+            messages=[{"role": "user", "content": test_prompt}], temperature=0.1, max_tokens=50
         )
 
         return {
@@ -431,7 +428,7 @@ Label:"""
             "few_shot_template": few_shot_examples,
             "test_prediction": test_result.strip(),
             "expected_label": validated_data[-1]["label"],
-            "note": "Few-shot learning template created. Use this template for inference."
+            "note": "Few-shot learning template created. Use this template for inference.",
         }
 
     except HTTPException:
@@ -444,6 +441,7 @@ Label:"""
 # =============================================================================
 # Startup/Shutdown Events
 # =============================================================================
+
 
 @app.on_event("startup")
 async def startup_event():
@@ -462,11 +460,5 @@ async def shutdown_event():
 
 if __name__ == "__main__":
     import uvicorn
-    
-    uvicorn.run(
-        app,
-        host="0.0.0.0",
-        port=9001,
-        log_level="info"
-    )
 
+    uvicorn.run(app, host="0.0.0.0", port=9001, log_level="info")

@@ -14,6 +14,7 @@
 - Token Bucket: https://en.wikipedia.org/wiki/Token_bucket
 - Stripe rate limiting: https://stripe.com/docs/rate-limits
 """
+
 import time
 import asyncio
 from typing import Dict, Any, Optional, List
@@ -30,10 +31,11 @@ logger = logging.getLogger(__name__)
 
 class RateLimitStrategy(str, Enum):
     """레이트 리미팅 전략"""
-    TOKEN_BUCKET = "token_bucket"      # 부드러운 레이트 리미팅
-    FIXED_WINDOW = "fixed_window"      # 고정 시간 윈도우
+
+    TOKEN_BUCKET = "token_bucket"  # 부드러운 레이트 리미팅
+    FIXED_WINDOW = "fixed_window"  # 고정 시간 윈도우
     SLIDING_WINDOW = "sliding_window"  # 슬라이딩 시간 윈도우
-    ADAPTIVE = "adaptive"              # 오류 기반 적응형
+    ADAPTIVE = "adaptive"  # 오류 기반 적응형
 
 
 @dataclass
@@ -43,6 +45,7 @@ class QuotaLimit:
 
     특정 리소스 또는 제공자에 대한 제한을 나타냅니다.
     """
+
     name: str
     requests_per_minute: int
     requests_per_hour: int
@@ -66,6 +69,7 @@ class QuotaLimit:
 @dataclass
 class RateLimitResult:
     """레이트 제한 체크 결과"""
+
     allowed: bool
     wait_time_seconds: float = 0.0
     reason: str = ""
@@ -194,7 +198,7 @@ class RateLimiter:
     def __init__(
         self,
         strategy: RateLimitStrategy = RateLimitStrategy.TOKEN_BUCKET,
-        enable_cost_tracking: bool = True
+        enable_cost_tracking: bool = True,
     ):
         """
         레이트 리미터 초기화
@@ -226,7 +230,7 @@ class RateLimiter:
         requests_per_day: int = 100000,
         tokens_per_minute: Optional[int] = None,
         cost_per_day_usd: Optional[float] = None,
-        burst_size: Optional[int] = None
+        burst_size: Optional[int] = None,
     ):
         """
         Register provider with rate limits
@@ -247,7 +251,7 @@ class RateLimiter:
             requests_per_hour=requests_per_hour,
             requests_per_day=requests_per_day,
             tokens_per_minute=tokens_per_minute,
-            cost_per_day_usd=cost_per_day_usd
+            cost_per_day_usd=cost_per_day_usd,
         )
 
         self.quotas[provider_name] = quota
@@ -257,10 +261,7 @@ class RateLimiter:
             capacity = burst_size or max(requests_per_minute // 6, 1)
             refill_rate = requests_per_minute / 60.0
 
-            self.buckets[provider_name] = TokenBucket(
-                capacity=capacity,
-                refill_rate=refill_rate
-            )
+            self.buckets[provider_name] = TokenBucket(capacity=capacity, refill_rate=refill_rate)
 
         # Initialize request history
         if self.strategy == RateLimitStrategy.SLIDING_WINDOW:
@@ -271,11 +272,7 @@ class RateLimiter:
             f"{requests_per_minute} RPM, {requests_per_hour} RPH"
         )
 
-    def check_rate_limit(
-        self,
-        provider_name: str,
-        tokens: int = 0
-    ) -> RateLimitResult:
+    def check_rate_limit(self, provider_name: str, tokens: int = 0) -> RateLimitResult:
         """
         Check if request is allowed under rate limits
 
@@ -301,7 +298,7 @@ class RateLimiter:
             return RateLimitResult(
                 allowed=False,
                 wait_time_seconds=max(0, wait_time),
-                reason=f"RPM limit exceeded ({quota.requests_per_minute})"
+                reason=f"RPM limit exceeded ({quota.requests_per_minute})",
             )
 
         if quota.requests_count_hour >= quota.requests_per_hour:
@@ -309,7 +306,7 @@ class RateLimiter:
             return RateLimitResult(
                 allowed=False,
                 wait_time_seconds=max(0, wait_time),
-                reason=f"RPH limit exceeded ({quota.requests_per_hour})"
+                reason=f"RPH limit exceeded ({quota.requests_per_hour})",
             )
 
         if quota.requests_count_day >= quota.requests_per_day:
@@ -317,7 +314,7 @@ class RateLimiter:
             return RateLimitResult(
                 allowed=False,
                 wait_time_seconds=max(0, wait_time),
-                reason=f"RPD limit exceeded ({quota.requests_per_day})"
+                reason=f"RPD limit exceeded ({quota.requests_per_day})",
             )
 
         # Check token limits
@@ -327,7 +324,7 @@ class RateLimiter:
                 return RateLimitResult(
                     allowed=False,
                     wait_time_seconds=max(0, wait_time),
-                    reason=f"TPM limit exceeded ({quota.tokens_per_minute})"
+                    reason=f"TPM limit exceeded ({quota.tokens_per_minute})",
                 )
 
         # Check cost limits
@@ -337,7 +334,7 @@ class RateLimiter:
                 return RateLimitResult(
                     allowed=False,
                     wait_time_seconds=max(0, wait_time),
-                    reason=f"Daily cost limit exceeded (${quota.cost_per_day_usd})"
+                    reason=f"Daily cost limit exceeded (${quota.cost_per_day_usd})",
                 )
 
         # Token bucket check
@@ -347,25 +344,16 @@ class RateLimiter:
                 if not bucket.consume(1):
                     wait_time = bucket.time_until_available(1)
                     return RateLimitResult(
-                        allowed=False,
-                        wait_time_seconds=wait_time,
-                        reason="Token bucket exhausted"
+                        allowed=False, wait_time_seconds=wait_time, reason="Token bucket exhausted"
                     )
 
         # Calculate remaining quota
         remaining = quota.requests_per_minute - quota.requests_count_minute
 
-        return RateLimitResult(
-            allowed=True,
-            quota_remaining=remaining
-        )
+        return RateLimitResult(allowed=True, quota_remaining=remaining)
 
     def record_request(
-        self,
-        provider_name: str,
-        tokens_used: int = 0,
-        cost_usd: float = 0.0,
-        success: bool = True
+        self, provider_name: str, tokens_used: int = 0, cost_usd: float = 0.0, success: bool = True
     ):
         """
         Record API request for quota tracking
@@ -396,12 +384,14 @@ class RateLimiter:
 
         # Add to sliding window history
         if self.strategy == RateLimitStrategy.SLIDING_WINDOW:
-            self.request_history[provider_name].append({
-                "timestamp": time.time(),
-                "tokens": tokens_used,
-                "cost": cost_usd,
-                "success": success
-            })
+            self.request_history[provider_name].append(
+                {
+                    "timestamp": time.time(),
+                    "tokens": tokens_used,
+                    "cost": cost_usd,
+                    "success": success,
+                }
+            )
 
     def _reset_counters(self, quota: QuotaLimit):
         """Reset quota counters based on time windows"""
@@ -425,10 +415,7 @@ class RateLimiter:
             quota.last_reset_day = now
 
     async def wait_for_capacity(
-        self,
-        provider_name: str,
-        tokens: int = 0,
-        max_wait: float = 60.0
+        self, provider_name: str, tokens: int = 0, max_wait: float = 60.0
     ) -> bool:
         """
         Wait until capacity is available
@@ -450,9 +437,7 @@ class RateLimiter:
                 return True
 
             if time.time() - start_time >= max_wait:
-                logger.warning(
-                    f"Max wait time exceeded for {provider_name}: {max_wait}s"
-                )
+                logger.warning(f"Max wait time exceeded for {provider_name}: {max_wait}s")
                 return False
 
             # Wait
@@ -483,19 +468,19 @@ class RateLimiter:
                 "minute": {
                     "used": quota.requests_count_minute,
                     "limit": quota.requests_per_minute,
-                    "remaining": quota.requests_per_minute - quota.requests_count_minute
+                    "remaining": quota.requests_per_minute - quota.requests_count_minute,
                 },
                 "hour": {
                     "used": quota.requests_count_hour,
                     "limit": quota.requests_per_hour,
-                    "remaining": quota.requests_per_hour - quota.requests_count_hour
+                    "remaining": quota.requests_per_hour - quota.requests_count_hour,
                 },
                 "day": {
                     "used": quota.requests_count_day,
                     "limit": quota.requests_per_day,
-                    "remaining": quota.requests_per_day - quota.requests_count_day
-                }
-            }
+                    "remaining": quota.requests_per_day - quota.requests_count_day,
+                },
+            },
         }
 
         # Add token info if tracked
@@ -504,7 +489,7 @@ class RateLimiter:
                 "minute": {
                     "used": quota.tokens_count_minute,
                     "limit": quota.tokens_per_minute,
-                    "remaining": quota.tokens_per_minute - quota.tokens_count_minute
+                    "remaining": quota.tokens_per_minute - quota.tokens_count_minute,
                 }
             }
 
@@ -514,7 +499,7 @@ class RateLimiter:
                 "day": {
                     "used_usd": quota.cost_today_usd,
                     "limit_usd": quota.cost_per_day_usd,
-                    "remaining_usd": quota.cost_per_day_usd - quota.cost_today_usd
+                    "remaining_usd": quota.cost_per_day_usd - quota.cost_today_usd,
                 }
             }
 
@@ -539,7 +524,7 @@ class RateLimiter:
                     "cost_today_usd": q.cost_today_usd,
                     "last_reset_minute": q.last_reset_minute,
                     "last_reset_hour": q.last_reset_hour,
-                    "last_reset_day": q.last_reset_day
+                    "last_reset_day": q.last_reset_day,
                 }
                 for name, q in self.quotas.items()
             }
@@ -591,14 +576,11 @@ if __name__ == "__main__":
         requests_per_day=100000,
         tokens_per_minute=90000,
         cost_per_day_usd=50.0,
-        burst_size=10
+        burst_size=10,
     )
 
     limiter.register_provider(
-        "anthropic",
-        requests_per_minute=50,
-        requests_per_hour=2000,
-        cost_per_day_usd=30.0
+        "anthropic", requests_per_minute=50, requests_per_hour=2000, cost_per_day_usd=30.0
     )
 
     # Simulate API calls
@@ -611,7 +593,9 @@ if __name__ == "__main__":
             print(f"Request {i+1}: ALLOWED (remaining: {result.quota_remaining})")
             limiter.record_request("openai", tokens_used=1200, cost_usd=0.024)
         else:
-            print(f"Request {i+1}: DENIED - {result.reason} (wait: {result.wait_time_seconds:.2f}s)")
+            print(
+                f"Request {i+1}: DENIED - {result.reason} (wait: {result.wait_time_seconds:.2f}s)"
+            )
 
         time.sleep(0.1)
 
@@ -620,9 +604,15 @@ if __name__ == "__main__":
     status = limiter.get_quota_status("openai")
 
     print(f"Provider: {status['provider']}")
-    print(f"Requests (minute): {status['requests']['minute']['used']}/{status['requests']['minute']['limit']}")
-    print(f"Tokens (minute): {status['tokens']['minute']['used']}/{status['tokens']['minute']['limit']}")
-    print(f"Cost (day): ${status['cost']['day']['used_usd']:.2f}/${status['cost']['day']['limit_usd']:.2f}")
+    print(
+        f"Requests (minute): {status['requests']['minute']['used']}/{status['requests']['minute']['limit']}"
+    )
+    print(
+        f"Tokens (minute): {status['tokens']['minute']['used']}/{status['tokens']['minute']['limit']}"
+    )
+    print(
+        f"Cost (day): ${status['cost']['day']['used_usd']:.2f}/${status['cost']['day']['limit_usd']:.2f}"
+    )
 
     # Test token bucket
     print("\n=== Token Bucket Test ===")

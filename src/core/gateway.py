@@ -129,5 +129,3 @@ def route_request(
         pass
 
     return heuristic
-
-

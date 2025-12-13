@@ -3,6 +3,7 @@ n8n Webhook API Routes
 
 n8n 워크플로우에서 직접 호출할 수 있는 전용 엔드포인트
 """
+
 from fastapi import APIRouter, HTTPException, BackgroundTasks
 from pydantic import BaseModel, Field
 from typing import Dict, Any, Optional, List
@@ -22,6 +23,7 @@ TASK_STORE: Dict[str, Dict[str, Any]] = {}
 
 class TaskStatus(str, Enum):
     """작업 상태"""
+
     PENDING = "pending"
     RUNNING = "running"
     COMPLETED = "completed"
@@ -32,20 +34,22 @@ class TaskStatus(str, Enum):
 # Request/Response Models
 # ============================================================================
 
+
 class N8NAgentRequest(BaseModel):
     """n8n에서 에이전트 실행 요청"""
+
     agent: str = Field(..., description="에이전트 이름 (news_trend_agent, viral_video_agent)")
     query: str = Field(..., description="분석 쿼리")
-    
+
     # 선택적 파라미터
     time_window: Optional[str] = Field("7d", description="시간 범위 (24h, 7d, 30d)")
     language: Optional[str] = Field("ko", description="언어 (ko, en)")
     max_results: Optional[int] = Field(20, description="최대 결과 수")
-    
+
     # n8n 워크플로우 메타데이터
     workflow_id: Optional[str] = Field(None, description="n8n 워크플로우 ID")
     execution_id: Optional[str] = Field(None, description="n8n 실행 ID")
-    
+
     # 알림 설정
     notify_slack: Optional[bool] = Field(False, description="Slack 알림 전송 여부")
     notify_webhook: Optional[str] = Field(None, description="결과를 전송할 Webhook URL")
@@ -53,24 +57,26 @@ class N8NAgentRequest(BaseModel):
 
 class N8NAgentResponse(BaseModel):
     """n8n 에이전트 실행 응답"""
+
     status: str = Field(..., description="실행 상태 (success, error)")
     task_id: str = Field(..., description="작업 ID")
     agent: str = Field(..., description="실행된 에이전트")
     query: str = Field(..., description="분석 쿼리")
-    
+
     # 결과 데이터
     result: Optional[Dict[str, Any]] = Field(None, description="분석 결과")
-    
+
     # 메타데이터
     execution_time: Optional[float] = Field(None, description="실행 시간 (초)")
     timestamp: str = Field(..., description="실행 시각")
-    
+
     # 에러 정보
     error: Optional[str] = Field(None, description="에러 메시지")
 
 
 class N8NBatchRequest(BaseModel):
     """n8n 배치 실행 요청"""
+
     tasks: List[N8NAgentRequest] = Field(..., description="실행할 작업 목록")
     parallel: bool = Field(False, description="병렬 실행 여부")
 
@@ -79,11 +85,12 @@ class N8NBatchRequest(BaseModel):
 # Endpoints
 # ============================================================================
 
+
 @router.post("/agent/execute", response_model=N8NAgentResponse)
 async def execute_agent(request: N8NAgentRequest, background_tasks: BackgroundTasks):
     """
     n8n에서 에이전트를 실행하는 메인 엔드포인트
-    
+
     **사용 예시 (n8n HTTP Request 노드):**
     ```
     Method: POST
@@ -111,41 +118,47 @@ async def execute_agent(request: N8NAgentRequest, background_tasks: BackgroundTa
         "updated_at": start_time.isoformat(),
         "progress": 0,
         "result": None,
-        "error": None
+        "error": None,
     }
 
-    logger.info(f"[n8n] Executing agent: {request.agent}, query: {request.query}, task_id: {task_id}")
+    logger.info(
+        f"[n8n] Executing agent: {request.agent}, query: {request.query}, task_id: {task_id}"
+    )
 
     try:
         # 에이전트 실행
         if request.agent == "news_trend_agent":
             from src.agents.news_trend.graph import run_agent
+
             result = run_agent(
                 query=request.query,
                 time_window=request.time_window,
                 language=request.language,
-                max_results=request.max_results
+                max_results=request.max_results,
             )
         elif request.agent == "viral_video_agent":
             from src.agents.viral_video.graph import run_agent
+
             result = run_agent(
                 query=request.query,
                 time_window=request.time_window,
-                market=request.language.upper() if request.language else "KR"
+                market=request.language.upper() if request.language else "KR",
             )
         else:
             raise HTTPException(status_code=400, detail=f"Unknown agent: {request.agent}")
-        
+
         execution_time = (datetime.now() - start_time).total_seconds()
 
         # 작업 완료 상태 업데이트
-        TASK_STORE[task_id].update({
-            "status": TaskStatus.COMPLETED,
-            "result": result,
-            "updated_at": datetime.now().isoformat(),
-            "execution_time": execution_time,
-            "progress": 100
-        })
+        TASK_STORE[task_id].update(
+            {
+                "status": TaskStatus.COMPLETED,
+                "result": result,
+                "updated_at": datetime.now().isoformat(),
+                "execution_time": execution_time,
+                "progress": 100,
+            }
+        )
 
         # 백그라운드 알림 전송
         if request.notify_slack:
@@ -154,7 +167,9 @@ async def execute_agent(request: N8NAgentRequest, background_tasks: BackgroundTa
         if request.notify_webhook:
             background_tasks.add_task(send_webhook_notification, result, request)
 
-        logger.info(f"[n8n] Agent execution completed: task_id={task_id}, time={execution_time:.2f}s")
+        logger.info(
+            f"[n8n] Agent execution completed: task_id={task_id}, time={execution_time:.2f}s"
+        )
 
         return N8NAgentResponse(
             status="success",
@@ -163,26 +178,24 @@ async def execute_agent(request: N8NAgentRequest, background_tasks: BackgroundTa
             query=request.query,
             result=result,
             execution_time=execution_time,
-            timestamp=datetime.now().isoformat()
+            timestamp=datetime.now().isoformat(),
         )
 
     except Exception as e:
         logger.error(f"[n8n] Agent execution failed: {e}", exc_info=True)
 
         # 작업 실패 상태 업데이트
-        TASK_STORE[task_id].update({
-            "status": TaskStatus.FAILED,
-            "error": str(e),
-            "updated_at": datetime.now().isoformat()
-        })
-        
+        TASK_STORE[task_id].update(
+            {"status": TaskStatus.FAILED, "error": str(e), "updated_at": datetime.now().isoformat()}
+        )
+
         return N8NAgentResponse(
             status="error",
             task_id=task_id,
             agent=request.agent,
             query=request.query,
             error=str(e),
-            timestamp=datetime.now().isoformat()
+            timestamp=datetime.now().isoformat(),
         )
 
 
@@ -190,7 +203,7 @@ async def execute_agent(request: N8NAgentRequest, background_tasks: BackgroundTa
 async def execute_batch(request: N8NBatchRequest):
     """
     n8n에서 여러 에이전트를 배치로 실행
-    
+
     **사용 예시:**
     ```json
     {
@@ -204,18 +217,18 @@ async def execute_batch(request: N8NBatchRequest):
     ```
     """
     logger.info(f"[n8n] Batch execution: {len(request.tasks)} tasks, parallel={request.parallel}")
-    
+
     results = []
-    
+
     if request.parallel:
         # 병렬 실행
         import asyncio
-        
+
         async def execute_task(task: N8NAgentRequest):
             # 각 작업을 개별적으로 실행
             response = await execute_agent(task, BackgroundTasks())
             return response
-        
+
         tasks = [execute_task(task) for task in request.tasks]
         results = await asyncio.gather(*tasks, return_exceptions=True)
     else:
@@ -223,12 +236,12 @@ async def execute_batch(request: N8NBatchRequest):
         for task in request.tasks:
             result = await execute_agent(task, BackgroundTasks())
             results.append(result)
-    
+
     return {
         "status": "completed",
         "total_tasks": len(request.tasks),
         "results": results,
-        "timestamp": datetime.now().isoformat()
+        "timestamp": datetime.now().isoformat(),
     }
 
 
@@ -259,7 +272,7 @@ async def get_task_status(task_id: str):
         "updated_at": task_data.get("updated_at"),
         "result": task_data.get("result"),
         "error": task_data.get("error"),
-        "progress": task_data.get("progress", 0)
+        "progress": task_data.get("progress", 0),
     }
 
 
@@ -290,12 +303,14 @@ async def receive_webhook_result(payload: Dict[str, Any]):
     # 메모리 저장소에 결과 저장
     if task_id in TASK_STORE:
         # 기존 작업 업데이트
-        TASK_STORE[task_id].update({
-            "webhook_result": payload.get("result"),
-            "workflow_id": payload.get("workflow_id"),
-            "webhook_received_at": datetime.now().isoformat(),
-            "metadata": payload.get("metadata", {})
-        })
+        TASK_STORE[task_id].update(
+            {
+                "webhook_result": payload.get("result"),
+                "workflow_id": payload.get("workflow_id"),
+                "webhook_received_at": datetime.now().isoformat(),
+                "metadata": payload.get("metadata", {}),
+            }
+        )
         logger.info(f"[n8n] Updated task {task_id} with webhook result")
     else:
         # 새 작업으로 저장
@@ -306,7 +321,7 @@ async def receive_webhook_result(payload: Dict[str, Any]):
             "workflow_id": payload.get("workflow_id"),
             "created_at": datetime.now().isoformat(),
             "webhook_received_at": datetime.now().isoformat(),
-            "metadata": payload.get("metadata", {})
+            "metadata": payload.get("metadata", {}),
         }
         logger.info(f"[n8n] Created new task {task_id} from webhook result")
 
@@ -317,7 +332,7 @@ async def receive_webhook_result(payload: Dict[str, Any]):
         "status": "received",
         "task_id": task_id,
         "timestamp": datetime.now().isoformat(),
-        "message": f"Webhook result for task {task_id} processed successfully"
+        "message": f"Webhook result for task {task_id} processed successfully",
     }
 
 
@@ -356,16 +371,17 @@ def _process_webhook_result(task_id: str, payload: Dict[str, Any]) -> None:
 # Helper Functions
 # ============================================================================
 
+
 async def send_slack_notification(result: Dict[str, Any], request: N8NAgentRequest):
     """Slack 알림 전송"""
     import aiohttp
     import os
-    
+
     slack_webhook = os.getenv("SLACK_WEBHOOK_URL")
     if not slack_webhook:
         logger.warning("[n8n] SLACK_WEBHOOK_URL not configured")
         return
-    
+
     try:
         message = {
             "text": f"✅ 에이전트 분석 완료",
@@ -374,19 +390,19 @@ async def send_slack_notification(result: Dict[str, Any], request: N8NAgentReque
                     "type": "section",
                     "text": {
                         "type": "mrkdwn",
-                        "text": f"*에이전트*: {request.agent}\n*쿼리*: {request.query}\n*결과*: 분석 완료"
-                    }
+                        "text": f"*에이전트*: {request.agent}\n*쿼리*: {request.query}\n*결과*: 분석 완료",
+                    },
                 }
-            ]
+            ],
         }
-        
+
         async with aiohttp.ClientSession() as session:
             async with session.post(slack_webhook, json=message) as response:
                 if response.status == 200:
                     logger.info("[n8n] Slack notification sent")
                 else:
                     logger.error(f"[n8n] Slack notification failed: {response.status}")
-    
+
     except Exception as e:
         logger.error(f"[n8n] Error sending Slack notification: {e}")
 
@@ -394,25 +410,24 @@ async def send_slack_notification(result: Dict[str, Any], request: N8NAgentReque
 async def send_webhook_notification(result: Dict[str, Any], request: N8NAgentRequest):
     """커스텀 Webhook으로 결과 전송"""
     import aiohttp
-    
+
     if not request.notify_webhook:
         return
-    
+
     try:
         payload = {
             "agent": request.agent,
             "query": request.query,
             "result": result,
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now().isoformat(),
         }
-        
+
         async with aiohttp.ClientSession() as session:
             async with session.post(request.notify_webhook, json=payload) as response:
                 if response.status == 200:
                     logger.info(f"[n8n] Webhook notification sent to {request.notify_webhook}")
                 else:
                     logger.error(f"[n8n] Webhook notification failed: {response.status}")
-    
+
     except Exception as e:
         logger.error(f"[n8n] Error sending webhook notification: {e}")
-

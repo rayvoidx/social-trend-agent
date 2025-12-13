@@ -25,7 +25,9 @@ def _pick_list(resp: Dict[str, Any], keys: Sequence[str]) -> List[Dict[str, Any]
     return []
 
 
-def parse_supadata_x_posts(resp: Dict[str, Any]) -> Tuple[SupadataToolResponse, List[SupadataXPost]]:
+def parse_supadata_x_posts(
+    resp: Dict[str, Any],
+) -> Tuple[SupadataToolResponse, List[SupadataXPost]]:
     parsed = SupadataToolResponse(
         tweets=resp.get("tweets") if isinstance(resp.get("tweets"), list) else None,
         items=resp.get("items") if isinstance(resp.get("items"), list) else None,
@@ -47,7 +49,9 @@ def parse_supadata_x_posts(resp: Dict[str, Any]) -> Tuple[SupadataToolResponse, 
     return parsed, posts
 
 
-def parse_supadata_tiktok_videos(resp: Dict[str, Any]) -> Tuple[SupadataToolResponse, List[SupadataTikTokVideo]]:
+def parse_supadata_tiktok_videos(
+    resp: Dict[str, Any],
+) -> Tuple[SupadataToolResponse, List[SupadataTikTokVideo]]:
     parsed = SupadataToolResponse(
         videos=resp.get("videos") if isinstance(resp.get("videos"), list) else None,
         items=resp.get("items") if isinstance(resp.get("items"), list) else None,
@@ -74,7 +78,9 @@ def parse_supadata_tiktok_videos(resp: Dict[str, Any]) -> Tuple[SupadataToolResp
     return parsed, vids
 
 
-def parse_supadata_youtube_videos(resp: Dict[str, Any]) -> Tuple[SupadataToolResponse, List[SupadataYouTubeVideo]]:
+def parse_supadata_youtube_videos(
+    resp: Dict[str, Any],
+) -> Tuple[SupadataToolResponse, List[SupadataYouTubeVideo]]:
     parsed = SupadataToolResponse(
         videos=resp.get("videos") if isinstance(resp.get("videos"), list) else None,
         items=resp.get("items") if isinstance(resp.get("items"), list) else None,
@@ -97,11 +103,16 @@ def parse_supadata_youtube_videos(resp: Dict[str, Any]) -> Tuple[SupadataToolRes
                 views=_first_int(r, ["views"]) or _first_int(stats, ["viewCount"]),
                 likes=_first_int(r, ["likes"]) or _first_int(stats, ["likeCount"]),
                 comments=_first_int(r, ["comments"]) or _first_int(stats, ["commentCount"]),
-                published_at=_first_str(r, ["published_at"]) or _first_str(snippet, ["publishedAt"]),
+                published_at=_first_str(r, ["published_at"])
+                or _first_str(snippet, ["publishedAt"]),
                 description=_first_str(r, ["description"]) or _first_str(snippet, ["description"]),
                 thumbnail=_first_str(r, ["thumbnail"])
                 or _first_str(
-                    (snippet.get("thumbnails", {}).get("default", {}) if isinstance(snippet.get("thumbnails"), dict) else {}),
+                    (
+                        snippet.get("thumbnails", {}).get("default", {})
+                        if isinstance(snippet.get("thumbnails"), dict)
+                        else {}
+                    ),
                     ["url"],
                 ),
             )
@@ -130,5 +141,3 @@ def _first_int(d: Dict[str, Any], keys: Sequence[str]) -> Optional[int]:
             except Exception:
                 continue
     return None
-
-

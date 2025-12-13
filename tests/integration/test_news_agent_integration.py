@@ -7,6 +7,7 @@ Tests complete end-to-end workflows including:
 - Performance monitoring
 - Evaluation
 """
+
 import pytest
 import json
 from unittest.mock import patch, MagicMock
@@ -23,7 +24,7 @@ SAMPLE_NEWS_DATA = [
         "url": "https://example.com/news1",
         "source": {"name": "Tech News"},
         "publishedAt": "2024-11-01T10:00:00Z",
-        "content": "AI is transforming industries..."
+        "content": "AI is transforming industries...",
     },
     {
         "title": "Machine learning advances",
@@ -31,8 +32,8 @@ SAMPLE_NEWS_DATA = [
         "url": "https://example.com/news2",
         "source": {"name": "Science Daily"},
         "publishedAt": "2024-11-01T11:00:00Z",
-        "content": "Researchers have developed..."
-    }
+        "content": "Researchers have developed...",
+    },
 ]
 
 
@@ -49,7 +50,7 @@ def mock_llm():
         "neutral": 5,
         "negative": 2,
         "key_emotions": ["excitement"],
-        "summary": "Positive trends"
+        "summary": "Positive trends",
     }
     return mock
 
@@ -59,18 +60,18 @@ class TestBasicPipeline:
 
     def test_full_pipeline_execution(self, mock_llm):
         """Test complete pipeline from query to report"""
-        with patch('src.agents.news_trend.graph.search_news', return_value=SAMPLE_NEWS_DATA):
+        with patch("src.agents.news_trend.graph.search_news", return_value=SAMPLE_NEWS_DATA):
             # Patch get_llm_client to return mock_llm for tools
-            with patch('src.integrations.llm.llm_client.get_llm_client', return_value=mock_llm):
+            with patch("src.integrations.llm.llm_client.get_llm_client", return_value=mock_llm):
                 # Also patch _get_llm if used by legacy graph
-                with patch('src.agents.news_trend.tools._get_llm', return_value=mock_llm):
+                with patch("src.agents.news_trend.tools._get_llm", return_value=mock_llm):
                     # Run agent
                     final_state = run_agent(
                         query="AI trends",
                         time_window="7d",
                         language="en",
                         max_results=5,
-                        require_approval=False
+                        require_approval=False,
                     )
 
                     # Verify state (NewsAgentState object)
@@ -106,18 +107,18 @@ class TestBasicPipeline:
                 "url": "https://example.com/news1",
                 "source": {"name": "경제뉴스"},
                 "publishedAt": "2024-11-01T10:00:00Z",
-                "content": "전기차 관련 내용..."
+                "content": "전기차 관련 내용...",
             }
         ]
 
-        with patch('src.agents.news_trend.graph.search_news', return_value=korean_news):
-            with patch('src.integrations.llm.llm_client.get_llm_client', return_value=mock_llm):
+        with patch("src.agents.news_trend.graph.search_news", return_value=korean_news):
+            with patch("src.integrations.llm.llm_client.get_llm_client", return_value=mock_llm):
                 final_state = run_agent(
                     query="전기차",
                     time_window="7d",
                     language="ko",
                     max_results=5,
-                    require_approval=False
+                    require_approval=False,
                 )
 
                 if hasattr(final_state, "model_dump"):
@@ -126,23 +127,22 @@ class TestBasicPipeline:
                     state_dict = final_state
 
                 # Verify Korean content in report
-                assert "전기차" in state_dict["report_md"] or "전기차" in str(state_dict["normalized"])
+                assert "전기차" in state_dict["report_md"] or "전기차" in str(
+                    state_dict["normalized"]
+                )
                 assert state_dict["language"] == "ko"
 
     def test_different_time_windows(self, mock_llm):
         """Test different time window configurations"""
         time_windows = ["24h", "7d", "30d"]
 
-        with patch('src.agents.news_trend.graph.search_news', return_value=SAMPLE_NEWS_DATA):
-            with patch('src.integrations.llm.llm_client.get_llm_client', return_value=mock_llm):
+        with patch("src.agents.news_trend.graph.search_news", return_value=SAMPLE_NEWS_DATA):
+            with patch("src.integrations.llm.llm_client.get_llm_client", return_value=mock_llm):
                 for tw in time_windows:
                     final_state = run_agent(
-                        query="test",
-                        time_window=tw,
-                        max_results=3,
-                        require_approval=False
+                        query="test", time_window=tw, max_results=3, require_approval=False
                     )
-                    
+
                     if hasattr(final_state, "time_window"):
                         assert final_state.time_window == tw
                         assert final_state.report_md is not None
@@ -156,14 +156,13 @@ class TestAdvancedFeatures:
 
     def test_advanced_pipeline_with_conditional_edges(self, mock_llm):
         """Test advanced pipeline with error recovery"""
-        with patch('src.agents.news_trend.graph.search_news', return_value=SAMPLE_NEWS_DATA):
-            with patch('src.integrations.llm.llm_client.get_llm_client', return_value=mock_llm):
+        with patch("src.agents.news_trend.graph.search_news", return_value=SAMPLE_NEWS_DATA):
+            with patch("src.integrations.llm.llm_client.get_llm_client", return_value=mock_llm):
                 try:
                     from src.agents.news_trend.graph_advanced import run_agent_advanced
+
                     final_state = run_agent_advanced(
-                        query="AI trends",
-                        time_window="7d",
-                        max_results=5
+                        query="AI trends", time_window="7d", max_results=5
                     )
                     # Should complete successfully even with potential errors
                     assert final_state is not None
@@ -184,13 +183,13 @@ class TestAdvancedFeatures:
             """Capture streaming events"""
             events.append(event)
 
-        with patch('src.agents.news_trend.graph.search_news', return_value=SAMPLE_NEWS_DATA):
-            with patch('src.integrations.llm.llm_client.get_llm_client', return_value=mock_llm):
+        with patch("src.agents.news_trend.graph.search_news", return_value=SAMPLE_NEWS_DATA):
+            with patch("src.integrations.llm.llm_client.get_llm_client", return_value=mock_llm):
                 final_state = await run_agent_with_streaming(
                     query="AI trends",
                     time_window="7d",
                     max_results=3,
-                    stream_callback=capture_event
+                    stream_callback=capture_event,
                 )
 
                 # Verify events were emitted
@@ -205,38 +204,36 @@ class TestPerformanceMonitoring:
 
     def test_performance_tracking(self, mock_llm):
         """Test performance monitoring during execution"""
-        
-        with patch('src.agents.news_trend.graph.search_news', return_value=SAMPLE_NEWS_DATA):
-            with patch('src.integrations.llm.llm_client.get_llm_client', return_value=mock_llm):
+
+        with patch("src.agents.news_trend.graph.search_news", return_value=SAMPLE_NEWS_DATA):
+            with patch("src.integrations.llm.llm_client.get_llm_client", return_value=mock_llm):
                 # Track collect node using the new monitoring system
                 with track_operation("collect_test", labels={"agent": "news_trend"}):
                     final_state = run_agent(
-                        query="AI trends",
-                        max_results=3,
-                        require_approval=False
+                        query="AI trends", max_results=3, require_approval=False
                     )
 
                 # Verify metrics (using get_snapshot)
                 registry = get_metrics_registry()
                 snapshot = registry.get_snapshot()
-                
+
                 # Check if we have any metrics recorded
                 # Note: Exact keys depend on what run_agent records internally
                 assert isinstance(snapshot, dict)
-                
+
                 if hasattr(final_state, "metrics"):
                     assert final_state.metrics is not None
 
     def test_metrics_persistence(self, mock_llm, tmp_path):
         """Test saving and loading metrics (simulated with snapshot)"""
-        
+
         # Create some metrics
         registry = get_metrics_registry()
         # Ensure registry is initialized
-        
+
         # Take snapshot
         snapshot = registry.get_snapshot()
-        
+
         # Save to file
         filepath = tmp_path / "metrics.json"
         with open(filepath, "w") as f:
@@ -248,7 +245,7 @@ class TestPerformanceMonitoring:
         # Verify JSON is valid
         with open(filepath) as f:
             data = json.load(f)
-        
+
         assert isinstance(data, dict)
 
 
@@ -257,14 +254,10 @@ class TestEvaluation:
 
     def test_evaluation_metrics(self, mock_llm):
         """Test evaluation of agent output"""
-        with patch('src.agents.news_trend.graph.search_news', return_value=SAMPLE_NEWS_DATA):
-            with patch('src.integrations.llm.llm_client.get_llm_client', return_value=mock_llm):
+        with patch("src.agents.news_trend.graph.search_news", return_value=SAMPLE_NEWS_DATA):
+            with patch("src.integrations.llm.llm_client.get_llm_client", return_value=mock_llm):
                 # Run agent
-                final_state = run_agent(
-                    query="AI trends",
-                    max_results=5,
-                    require_approval=False
-                )
+                final_state = run_agent(query="AI trends", max_results=5, require_approval=False)
 
                 # Prepare output for evaluation
                 if hasattr(final_state, "model_dump"):
@@ -277,7 +270,7 @@ class TestEvaluation:
                     "report_md": state_dict.get("report_md"),
                     "analysis": state_dict.get("analysis"),
                     "metrics": state_dict.get("metrics"),
-                    "normalized": state_dict.get("normalized")
+                    "normalized": state_dict.get("normalized"),
                 }
 
                 # Evaluate
@@ -307,10 +300,10 @@ class TestEvaluation:
             "analysis": {
                 "sentiment": {"positive": 10},
                 "keywords": {"top_keywords": [{"keyword": "AI", "count": 10}]},
-                "summary": "Great insights with actionable recommendations"
+                "summary": "Great insights with actionable recommendations",
             },
             "metrics": {"coverage": 0.95, "factuality": 1.0, "actionability": 0.9},
-            "normalized": [{"title": "AI", "url": "http://test.com", "source": "Test"}]
+            "normalized": [{"title": "AI", "url": "http://test.com", "source": "Test"}],
         }
 
         metrics = evaluator.evaluate("AI trends", high_quality_output)
@@ -325,13 +318,9 @@ class TestErrorRecovery:
 
     def test_graceful_degradation_no_api_keys(self, mock_llm):
         """Test agent works without API keys (sample data fallback)"""
-        with patch('src.agents.news_trend.graph.search_news', return_value=SAMPLE_NEWS_DATA):
-            with patch('src.integrations.llm.llm_client.get_llm_client', return_value=mock_llm):
-                final_state = run_agent(
-                    query="test",
-                    max_results=3,
-                    require_approval=False
-                )
+        with patch("src.agents.news_trend.graph.search_news", return_value=SAMPLE_NEWS_DATA):
+            with patch("src.integrations.llm.llm_client.get_llm_client", return_value=mock_llm):
+                final_state = run_agent(query="test", max_results=3, require_approval=False)
 
                 # Should complete with mocked data
                 assert final_state is not None
@@ -344,13 +333,13 @@ class TestErrorRecovery:
 
     def test_partial_completion_handling(self, mock_llm):
         """Test handling of partial completions"""
-        with patch('src.agents.news_trend.graph.search_news', return_value=[]):
-            with patch('src.integrations.llm.llm_client.get_llm_client', return_value=mock_llm):
+        with patch("src.agents.news_trend.graph.search_news", return_value=[]):
+            with patch("src.integrations.llm.llm_client.get_llm_client", return_value=mock_llm):
                 # Run with empty results
                 final_state = run_agent(
                     query="very specific niche query that might fail",
                     max_results=1,
-                    require_approval=False
+                    require_approval=False,
                 )
 
                 # Should complete even with no data
@@ -381,34 +370,22 @@ def sample_agent_output():
    - Monitor emerging trends
    """,
         "analysis": {
-            "sentiment": {
-                "positive": 10,
-                "neutral": 5,
-                "negative": 2,
-                "positive_pct": 60.0
-            },
+            "sentiment": {"positive": 10, "neutral": 5, "negative": 2, "positive_pct": 60.0},
             "keywords": {
-                "top_keywords": [
-                    {"keyword": "AI", "count": 15},
-                    {"keyword": "trends", "count": 10}
-                ]
+                "top_keywords": [{"keyword": "AI", "count": 15}, {"keyword": "trends", "count": 10}]
             },
-            "summary": "Positive trends with actionable recommendations"
+            "summary": "Positive trends with actionable recommendations",
         },
-        "metrics": {
-            "coverage": 0.9,
-            "factuality": 1.0,
-            "actionability": 0.8
-        },
+        "metrics": {"coverage": 0.9, "factuality": 1.0, "actionability": 0.8},
         "normalized": [
             {
                 "title": "AI Trends 2024",
                 "description": "Latest AI trends",
                 "url": "https://example.com/ai-trends",
                 "source": "Tech News",
-                "published_at": "2024-01-01"
+                "published_at": "2024-01-01",
             }
-        ]
+        ],
     }
 
 

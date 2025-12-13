@@ -43,6 +43,7 @@ from src.core.planning.graph import build_plan_runner_graph
 try:
     # Check LangChain availability
     import langchain
+
     LANGCHAIN_AVAILABLE = True
 except ImportError:
     LANGCHAIN_AVAILABLE = False
@@ -57,6 +58,7 @@ ARTIFACTS_DIR.mkdir(parents=True, exist_ok=True)
 # =============================================================================
 # LangGraph Node Functions
 # =============================================================================
+
 
 def router_node(state: SocialTrendAgentState) -> Dict[str, Any]:
     """Cheap gateway/router node (Compound AI 2025)."""
@@ -106,7 +108,11 @@ def rag_filter_node(state: SocialTrendAgentState) -> Dict[str, Any]:
     routed = (state.analysis or {}).get("_routing", {}) if isinstance(state.analysis, dict) else {}
     rag_mode = str(routed.get("rag_mode") or "graph").lower()
     rag_top_k = routed.get("rag_top_k")
-    top_k = int(rag_top_k) if isinstance(rag_top_k, int) and rag_top_k > 0 else min(30, len(state.normalized))
+    top_k = (
+        int(rag_top_k)
+        if isinstance(rag_top_k, int) and rag_top_k > 0
+        else min(30, len(state.normalized))
+    )
 
     steps = state.plan.get("steps") if isinstance(state.plan, dict) else []
     if isinstance(steps, list) and steps and not has_step(steps, "rag"):
@@ -117,12 +123,15 @@ def rag_filter_node(state: SocialTrendAgentState) -> Dict[str, Any]:
         return {}
 
     use_graph = rag_mode != "vector"
-    filtered = retrieve_relevant_posts(state.query, state.normalized, top_k=top_k, use_graph=use_graph)
+    filtered = retrieve_relevant_posts(
+        state.query, state.normalized, top_k=top_k, use_graph=use_graph
+    )
     agent_logger.node_end("rag_filter", output_size=len(filtered))
     return {
         "normalized": filtered,
         "analysis": {**(state.analysis or {}), "rag_selected": len(filtered)},
     }
+
 
 def collect_node(state: SocialTrendAgentState) -> Dict[str, Any]:
     """소셜 미디어 데이터 수집 노드"""
@@ -131,14 +140,26 @@ def collect_node(state: SocialTrendAgentState) -> Dict[str, Any]:
     agent_logger.node_start("collect")
 
     steps = state.plan.get("steps") if isinstance(state.plan, dict) else []
-    current_step_id = (state.plan_execution or {}).get("current_step_id") if isinstance(state.plan_execution, dict) else None
-    rp = get_retry_policy_for_step(steps, current_step_id) or get_retry_policy_for_op(steps, "collect")
+    current_step_id = (
+        (state.plan_execution or {}).get("current_step_id")
+        if isinstance(state.plan_execution, dict)
+        else None
+    )
+    rp = get_retry_policy_for_step(steps, current_step_id) or get_retry_policy_for_op(
+        steps, "collect"
+    )
     timeout_s = get_timeout_for_step(steps, current_step_id) or get_timeout_for_op(steps, "collect")
     cb = get_circuit_breaker_for_step(steps, current_step_id)
-    strict = isinstance(cb, dict) and isinstance(cb.get("failure_threshold"), int) and cb.get("failure_threshold", 0) > 0
+    strict = (
+        isinstance(cb, dict)
+        and isinstance(cb.get("failure_threshold"), int)
+        and cb.get("failure_threshold", 0) > 0
+    )
 
     all_items = []
-    max_per_platform = state.max_results_per_platform // len(state.platforms) if state.platforms else 10
+    max_per_platform = (
+        state.max_results_per_platform // len(state.platforms) if state.platforms else 10
+    )
 
     for platform in state.platforms:
         try:
@@ -203,9 +224,13 @@ def collect_node(state: SocialTrendAgentState) -> Dict[str, Any]:
         all_items.extend(rss_items)
 
     # Convert CollectedItem objects to dicts
-    all_items_dict = [asdict(item) if hasattr(item, "__dataclass_fields__") else item for item in all_items]
+    all_items_dict = [
+        asdict(item) if hasattr(item, "__dataclass_fields__") else item for item in all_items
+    ]
 
-    agent_logger.node_end("collect", output_size=len(all_items_dict), items_count=len(all_items_dict))
+    agent_logger.node_end(
+        "collect", output_size=len(all_items_dict), items_count=len(all_items_dict)
+    )
     return {"raw_items": all_items_dict}
 
 
@@ -217,7 +242,9 @@ def normalize_node(state: SocialTrendAgentState) -> Dict[str, Any]:
 
     normalized = normalize_items(state.raw_items)
 
-    agent_logger.node_end("normalize", output_size=len(normalized), normalized_count=len(normalized))
+    agent_logger.node_end(
+        "normalize", output_size=len(normalized), normalized_count=len(normalized)
+    )
     return {"normalized": normalized}
 
 
@@ -227,10 +254,7 @@ def analyze_node(state: SocialTrendAgentState) -> Dict[str, Any]:
     agent_logger = AgentLogger("social_trend_agent", run_id)
     agent_logger.node_start("analyze")
 
-    texts = [
-        it.get("title", "") + "\n" + it.get("content", "")
-        for it in state.normalized
-    ]
+    texts = [it.get("title", "") + "\n" + it.get("content", "") for it in state.normalized]
     analysis = analyze_sentiment_and_keywords(texts)
 
     # Extract engagement stats per platform
@@ -241,11 +265,10 @@ def analyze_node(state: SocialTrendAgentState) -> Dict[str, Any]:
             engagement_stats[platform] = {"count": 0, "total_engagement": 0}
         engagement_stats[platform]["count"] += 1
 
-    agent_logger.node_end("analyze", output_size=len(state.normalized), sentiment=analysis.get("sentiment", {}))
-    return {
-        "analysis": analysis,
-        "engagement_stats": engagement_stats
-    }
+    agent_logger.node_end(
+        "analyze", output_size=len(state.normalized), sentiment=analysis.get("sentiment", {})
+    )
+    return {"analysis": analysis, "engagement_stats": engagement_stats}
 
 
 def summarize_node(state: SocialTrendAgentState) -> Dict[str, Any]:
@@ -264,11 +287,7 @@ def summarize_node(state: SocialTrendAgentState) -> Dict[str, Any]:
     )
 
     summary = _make_summary(state.analysis)
-    updated_analysis = {
-        **state.analysis,
-        "summary": summary,
-        "llm_insights": llm_insights
-    }
+    updated_analysis = {**state.analysis, "summary": summary, "llm_insights": llm_insights}
 
     agent_logger.node_end("summarize")
     return {"analysis": updated_analysis}
@@ -292,19 +311,17 @@ def report_node(state: SocialTrendAgentState) -> Dict[str, Any]:
         state.analysis,
         state.analysis.get("summary", ""),
         metrics,
-        state.analysis.get("llm_insights", "")
+        state.analysis.get("llm_insights", ""),
     )
 
     agent_logger.node_end("report", output_size=len(state.normalized), report_path=str(report_path))
-    return {
-        "metrics": metrics,
-        "report_md": str(report_path)
-    }
+    return {"metrics": metrics, "report_md": str(report_path)}
 
 
 # =============================================================================
 # Graph Builder
 # =============================================================================
+
 
 def build_graph(checkpointer: Optional[Any] = None) -> Any:
     """Social Trend Agent 그래프 빌드"""
@@ -330,14 +347,14 @@ def build_graph(checkpointer: Optional[Any] = None) -> Any:
     graph.add_edge("report", END)
 
     return graph.compile(
-        checkpointer=checkpointer,
-        interrupt_before=["report"] if checkpointer else None
+        checkpointer=checkpointer, interrupt_before=["report"] if checkpointer else None
     )
 
 
 # =============================================================================
 # Main Entry Point
 # =============================================================================
+
 
 def run_agent(
     query: str,
@@ -403,42 +420,42 @@ def run_agent(
     else:
         graph = build_graph(checkpointer=checkpointer)
     config = {"configurable": {"thread_id": run_id}}
-    
+
     logger.info(f"Starting Social Trend Agent run: {run_id}")
 
     try:
         # 1. Start execution
         current_state = graph.invoke(initial_state, config=config)
-        
+
         # 2. Check for interrupt
         if require_approval:
             snapshot = graph.get_state(config)
             if snapshot.next and "report" in snapshot.next:
                 # CLI Interaction
-                print("\n" + "="*50)
+                print("\n" + "=" * 50)
                 print("✋  APPROVAL REQUIRED")
-                print("="*50)
+                print("=" * 50)
                 print(f"Social analysis complete for: '{query}'")
                 print("-" * 50)
-                
+
                 while True:
                     choice = input("Proceed to generate report? (y/n): ").strip().lower()
-                    if choice == 'y':
+                    if choice == "y":
                         logger.info("✅ Approved. Resuming...")
                         current_state = graph.invoke(None, config=config)
                         break
-                    elif choice == 'n':
+                    elif choice == "n":
                         logger.info("🛑 Aborted by user.")
                         return SocialTrendAgentState(**cast(Dict[str, Any], current_state))
                     else:
                         print("Please enter 'y' or 'n'.")
-                    
+
         logger.info(f"Completed Social Trend Agent run: {run_id}")
-        
+
         if isinstance(current_state, dict):
             return SocialTrendAgentState(**cast(Dict[str, Any], current_state))
         return current_state
-        
+
     except Exception as e:
         logger.error(f"Error running social trend agent: {e}")
         raise
@@ -496,7 +513,7 @@ def _write_report(
     analysis: Dict[str, Any],
     summary: str,
     metrics: Dict[str, Any],
-    llm_insights: str = ""
+    llm_insights: str = "",
 ) -> None:
     lines = []
     lines.append(f"# Social Trend Report")
@@ -514,9 +531,15 @@ def _write_report(
     # Sentiment breakdown
     sentiment = analysis.get("sentiment", {})
     lines.append("## 💭 Sentiment Analysis")
-    lines.append(f"- **Positive**: {sentiment.get('positive', 0)} ({sentiment.get('positive_pct', 0):.1f}%)")
-    lines.append(f"- **Neutral**: {sentiment.get('neutral', 0)} ({sentiment.get('neutral_pct', 0):.1f}%)")
-    lines.append(f"- **Negative**: {sentiment.get('negative', 0)} ({sentiment.get('negative_pct', 0):.1f}%)")
+    lines.append(
+        f"- **Positive**: {sentiment.get('positive', 0)} ({sentiment.get('positive_pct', 0):.1f}%)"
+    )
+    lines.append(
+        f"- **Neutral**: {sentiment.get('neutral', 0)} ({sentiment.get('neutral_pct', 0):.1f}%)"
+    )
+    lines.append(
+        f"- **Negative**: {sentiment.get('negative', 0)} ({sentiment.get('negative_pct', 0):.1f}%)"
+    )
     lines.append("")
 
     # Keywords
@@ -544,9 +567,9 @@ def _write_report(
     # Top items
     lines.append("## 📱 Top Social Posts")
     for i, it in enumerate(normalized[:10], 1):
-        title = it.get('title', 'No title')
-        url = it.get('url', '')
-        source = it.get('source', 'Unknown')
+        title = it.get("title", "No title")
+        url = it.get("url", "")
+        source = it.get("source", "Unknown")
         if url:
             lines.append(f"{i}. [{title}]({url}) - *{source}*")
         else:

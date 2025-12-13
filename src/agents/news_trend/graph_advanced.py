@@ -10,6 +10,7 @@ References:
 - Conditional Edges: https://langchain-ai.github.io/langgraph/how-tos/branching/
 - Streaming: https://langchain-ai.github.io/langgraph/how-tos/stream-values/
 """
+
 import os
 import uuid
 import logging
@@ -42,6 +43,7 @@ from src.agents.news_trend.tools import (
 
 # Initialize module-level logger (without run_id for module-level logging)
 _module_logger = logging.getLogger("news_trend_agent_advanced")
+
 
 def router_node(state: NewsAgentState) -> Dict[str, Any]:
     """Cheap gateway/router node (Compound AI 2025)."""
@@ -83,6 +85,7 @@ def router_node(state: NewsAgentState) -> Dict[str, Any]:
 # Advanced Node Functions with Parallel Execution
 # ============================================================================
 
+
 async def parallel_collect_node(state: NewsAgentState) -> Dict[str, Any]:
     """
     Collect news data with parallel API calls
@@ -102,7 +105,7 @@ async def parallel_collect_node(state: NewsAgentState) -> Dict[str, Any]:
             time_window=state.time_window or "7d",
             language="en" if state.language == "en" else "ko",
             max_results=state.max_results // 2,
-            fallback_value=[]
+            fallback_value=[],
         )
 
     async def fetch_naver():
@@ -114,15 +117,11 @@ async def parallel_collect_node(state: NewsAgentState) -> Dict[str, Any]:
             time_window=state.time_window or "7d",
             language="ko",
             max_results=state.max_results // 2,
-            fallback_value=[]
+            fallback_value=[],
         )
 
     # Execute in parallel
-    results = await asyncio.gather(
-        fetch_newsapi(),
-        fetch_naver(),
-        return_exceptions=True
-    )
+    results = await asyncio.gather(fetch_newsapi(), fetch_naver(), return_exceptions=True)
 
     # Combine results
     raw_items = []
@@ -134,10 +133,7 @@ async def parallel_collect_node(state: NewsAgentState) -> Dict[str, Any]:
 
     logger.node_end("parallel_collect", output_size=len(raw_items))
 
-    return {
-        "raw_items": raw_items,
-        "error": None if raw_items else "All parallel fetches failed"
-    }
+    return {"raw_items": raw_items, "error": None if raw_items else "All parallel fetches failed"}
 
 
 def collect_node_with_retry(state: NewsAgentState) -> Dict[str, Any]:
@@ -153,11 +149,21 @@ def collect_node_with_retry(state: NewsAgentState) -> Dict[str, Any]:
     if isinstance(steps, list) and steps and not has_step(steps, "collect"):
         logger.node_end("collect", output_size=0, status=CompletionStatus.FULL.value)
         return {"retry_count": 0}
-    current_step_id = (state.plan_execution or {}).get("current_step_id") if isinstance(state.plan_execution, dict) else None
-    rp = get_retry_policy_for_step(steps, current_step_id) or get_retry_policy_for_op(steps, "collect")
+    current_step_id = (
+        (state.plan_execution or {}).get("current_step_id")
+        if isinstance(state.plan_execution, dict)
+        else None
+    )
+    rp = get_retry_policy_for_step(steps, current_step_id) or get_retry_policy_for_op(
+        steps, "collect"
+    )
     timeout_s = get_timeout_for_step(steps, current_step_id) or get_timeout_for_op(steps, "collect")
     cb = get_circuit_breaker_for_step(steps, current_step_id)
-    strict = isinstance(cb, dict) and isinstance(cb.get("failure_threshold"), int) and cb.get("failure_threshold", 0) > 0
+    strict = (
+        isinstance(cb, dict)
+        and isinstance(cb.get("failure_threshold"), int)
+        and cb.get("failure_threshold", 0) > 0
+    )
     result = PartialResult(status=CompletionStatus.FULL)
 
     raw_items = safe_api_call(
@@ -175,14 +181,18 @@ def collect_node_with_retry(state: NewsAgentState) -> Dict[str, Any]:
     )
 
     # Determine retry count
-    retry_count = getattr(state, 'retry_count', 0)
+    retry_count = getattr(state, "retry_count", 0)
 
     logger.node_end("collect", output_size=len(raw_items), status=result.status.value)
 
     return {
         "raw_items": raw_items,
-        "error": (result.errors[0].get("error_message") if result.errors else None) if result.status == CompletionStatus.FAILED else None,
-        "retry_count": retry_count + 1 if result.status == CompletionStatus.FAILED else 0
+        "error": (
+            (result.errors[0].get("error_message") if result.errors else None)
+            if result.status == CompletionStatus.FAILED
+            else None
+        ),
+        "retry_count": retry_count + 1 if result.status == CompletionStatus.FAILED else 0,
     }
 
 
@@ -197,14 +207,20 @@ def normalize_node(state: NewsAgentState) -> Dict[str, Any]:
         return {}
     normalized = []
     for item in state.raw_items:
-        normalized.append({
-            "title": item.get("title", "").strip(),
-            "description": item.get("description", "").strip(),
-            "url": item.get("url", ""),
-            "source": item.get("source", {}).get("name", "Unknown") if isinstance(item.get("source"), dict) else str(item.get("source", "Unknown")),
-            "published_at": item.get("publishedAt", ""),
-            "content": item.get("content", "").strip()
-        })
+        normalized.append(
+            {
+                "title": item.get("title", "").strip(),
+                "description": item.get("description", "").strip(),
+                "url": item.get("url", ""),
+                "source": (
+                    item.get("source", {}).get("name", "Unknown")
+                    if isinstance(item.get("source"), dict)
+                    else str(item.get("source", "Unknown"))
+                ),
+                "published_at": item.get("publishedAt", ""),
+                "content": item.get("content", "").strip(),
+            }
+        )
 
     logger.node_end("normalize", normalized_count=len(normalized))
 
@@ -224,11 +240,22 @@ async def parallel_analyze_node(state: NewsAgentState) -> Dict[str, Any]:
     if isinstance(steps, list) and steps and not has_step(steps, "analyze"):
         logger.node_end("parallel_analyze")
         return {}
-    current_step_id = (state.plan_execution or {}).get("current_step_id") if isinstance(state.plan_execution, dict) else None
-    rp = get_retry_policy_for_step(steps, current_step_id) or get_retry_policy_for_op(steps, "analyze")
+    current_step_id = (
+        (state.plan_execution or {}).get("current_step_id")
+        if isinstance(state.plan_execution, dict)
+        else None
+    )
+    rp = get_retry_policy_for_step(steps, current_step_id) or get_retry_policy_for_op(
+        steps, "analyze"
+    )
     timeout_s = get_timeout_for_step(steps, current_step_id) or get_timeout_for_op(steps, "analyze")
     cb = get_circuit_breaker_for_step(steps, current_step_id)
-    strict = isinstance(cb, dict) and isinstance(cb.get("failure_threshold"), int) and cb.get("failure_threshold", 0) > 0
+    strict = (
+        isinstance(cb, dict)
+        and isinstance(cb.get("failure_threshold"), int)
+        and cb.get("failure_threshold", 0) > 0
+    )
+
     # Define async wrappers
     async def analyze_sentiment_async():
         """Async wrapper for sentiment analysis"""
@@ -256,14 +283,13 @@ async def parallel_analyze_node(state: NewsAgentState) -> Dict[str, Any]:
 
     # Execute in parallel
     sentiment_results, keyword_results = await asyncio.gather(
-        analyze_sentiment_async(),
-        extract_keywords_async()
+        analyze_sentiment_async(), extract_keywords_async()
     )
 
     analysis = {
         "sentiment": sentiment_results,
         "keywords": keyword_results,
-        "total_items": len(state.normalized)
+        "total_items": len(state.normalized),
     }
 
     logger.node_end("parallel_analyze")
@@ -279,7 +305,11 @@ def rag_node(state: NewsAgentState) -> Dict[str, Any]:
     routed = (state.analysis or {}).get("_routing", {}) if isinstance(state.analysis, dict) else {}
     rag_mode = str(routed.get("rag_mode") or "graph").lower()
     rag_top_k = routed.get("rag_top_k")
-    top_k = int(rag_top_k) if isinstance(rag_top_k, int) and rag_top_k > 0 else min(10, len(state.normalized))
+    top_k = (
+        int(rag_top_k)
+        if isinstance(rag_top_k, int) and rag_top_k > 0
+        else min(10, len(state.normalized))
+    )
 
     steps = state.plan.get("steps") if isinstance(state.plan, dict) else []
     if isinstance(steps, list) and steps and not has_step(steps, "rag"):
@@ -289,7 +319,9 @@ def rag_node(state: NewsAgentState) -> Dict[str, Any]:
         relevant = state.normalized[: max(1, top_k)]
     else:
         use_graph = rag_mode != "vector"
-        relevant = retrieve_relevant_items(state.query, state.normalized, top_k, use_graph=use_graph)
+        relevant = retrieve_relevant_items(
+            state.query, state.normalized, top_k, use_graph=use_graph
+        )
 
     logger.node_end("rag", output_size=len(relevant))
     return {"analysis": {**state.analysis, "_rag_relevant": relevant}}
@@ -305,13 +337,19 @@ def summarize_node(state: NewsAgentState) -> Dict[str, Any]:
     routed = (state.analysis or {}).get("_routing", {}) if isinstance(state.analysis, dict) else {}
     rag_mode = str(routed.get("rag_mode") or "graph").lower()
     rag_top_k = routed.get("rag_top_k")
-    top_k = int(rag_top_k) if isinstance(rag_top_k, int) and rag_top_k > 0 else min(10, len(state.normalized))
+    top_k = (
+        int(rag_top_k)
+        if isinstance(rag_top_k, int) and rag_top_k > 0
+        else min(10, len(state.normalized))
+    )
 
     steps = state.plan.get("steps") if isinstance(state.plan, dict) else []
     if isinstance(steps, list) and steps and not has_step(steps, "rag"):
         rag_mode = "none"
 
-    cached = (state.analysis or {}).get("_rag_relevant") if isinstance(state.analysis, dict) else None
+    cached = (
+        (state.analysis or {}).get("_rag_relevant") if isinstance(state.analysis, dict) else None
+    )
     if isinstance(cached, list) and cached:
         relevant = cached
     else:
@@ -319,13 +357,27 @@ def summarize_node(state: NewsAgentState) -> Dict[str, Any]:
             relevant = state.normalized[: max(1, top_k)]
         else:
             use_graph = rag_mode != "vector"
-            relevant = retrieve_relevant_items(state.query, state.normalized, top_k, use_graph=use_graph)
+            relevant = retrieve_relevant_items(
+                state.query, state.normalized, top_k, use_graph=use_graph
+            )
 
-    current_step_id = (state.plan_execution or {}).get("current_step_id") if isinstance(state.plan_execution, dict) else None
-    rp = get_retry_policy_for_step(steps, current_step_id) or get_retry_policy_for_op(steps, "summarize")
-    timeout_s = get_timeout_for_step(steps, current_step_id) or get_timeout_for_op(steps, "summarize")
+    current_step_id = (
+        (state.plan_execution or {}).get("current_step_id")
+        if isinstance(state.plan_execution, dict)
+        else None
+    )
+    rp = get_retry_policy_for_step(steps, current_step_id) or get_retry_policy_for_op(
+        steps, "summarize"
+    )
+    timeout_s = get_timeout_for_step(steps, current_step_id) or get_timeout_for_op(
+        steps, "summarize"
+    )
     cb = get_circuit_breaker_for_step(steps, current_step_id)
-    strict = isinstance(cb, dict) and isinstance(cb.get("failure_threshold"), int) and cb.get("failure_threshold", 0) > 0
+    strict = (
+        isinstance(cb, dict)
+        and isinstance(cb.get("failure_threshold"), int)
+        and cb.get("failure_threshold", 0) > 0
+    )
 
     summary = safe_api_call(
         operation_name="summarize_trend",
@@ -373,21 +425,23 @@ def report_node(state: NewsAgentState) -> Dict[str, Any]:
     for kw in keywords[:10]:
         report_lines.append(f"- **{kw['keyword']}** ({kw['count']}회)")
 
-    report_lines.extend([
-        f"",
-        f"## 💡 주요 인사이트",
-        f"",
-        state.analysis.get("summary", "No summary available."),
-        f"",
-        f"**Run ID**: `{state.run_id}`"
-    ])
+    report_lines.extend(
+        [
+            f"",
+            f"## 💡 주요 인사이트",
+            f"",
+            state.analysis.get("summary", "No summary available."),
+            f"",
+            f"**Run ID**: `{state.run_id}`",
+        ]
+    )
 
     report_md = "\n".join(report_lines)
 
     metrics = {
         "coverage": len(state.normalized) / max(state.max_results, 1),
         "factuality": 1.0 if all(item.get("url") for item in state.normalized) else 0.0,
-        "actionability": 1.0 if state.analysis.get("summary") else 0.0
+        "actionability": 1.0 if state.analysis.get("summary") else 0.0,
     }
 
     logger.node_end("report", metrics=metrics)
@@ -410,6 +464,7 @@ def notify_node(state: NewsAgentState) -> Dict[str, Any]:
 # Conditional Edge Functions
 # ============================================================================
 
+
 def should_retry_collect(state: NewsAgentState) -> Literal["retry_collect", "normalize", "end"]:
     """
     Conditional edge: decide whether to retry collection
@@ -421,7 +476,7 @@ def should_retry_collect(state: NewsAgentState) -> Literal["retry_collect", "nor
         - "normalize": If collection succeeded
         - "end": If max retries exceeded
     """
-    retry_count = getattr(state, 'retry_count', 0)
+    retry_count = getattr(state, "retry_count", 0)
     has_data = len(state.raw_items) > 0
 
     if has_data:
@@ -452,6 +507,7 @@ def should_proceed_to_analysis(state: NewsAgentState) -> Literal["analyze", "end
 # ============================================================================
 # Advanced Graph Builder
 # ============================================================================
+
 
 def build_advanced_graph():
     """
@@ -486,18 +542,13 @@ def build_advanced_graph():
         should_retry_collect,
         {
             "retry_collect": "collect",  # Loop back for retry
-            "normalize": "normalize",    # Success path
-            "end": END                   # Give up
-        }
+            "normalize": "normalize",  # Success path
+            "end": END,  # Give up
+        },
     )
 
     graph.add_conditional_edges(
-        "normalize",
-        should_proceed_to_analysis,
-        {
-            "analyze": "analyze",
-            "end": END
-        }
+        "normalize", should_proceed_to_analysis, {"analyze": "analyze", "end": END}
     )
 
     # Regular edges
@@ -518,12 +569,13 @@ def build_advanced_graph():
 # Streaming Support
 # ============================================================================
 
+
 async def run_agent_with_streaming(
     query: str,
     time_window: str = "7d",
     language: str = "ko",
     max_results: int = 20,
-    stream_callback=None
+    stream_callback=None,
 ):
     """
     Run agent with streaming support
@@ -558,7 +610,7 @@ async def run_agent_with_streaming(
         time_window=time_window,
         language=language,
         max_results=max_results,
-        run_id=run_id
+        run_id=run_id,
     )
 
     graph = build_advanced_graph()
@@ -581,10 +633,7 @@ async def run_agent_with_streaming(
 
 
 def run_agent_advanced(
-    query: str,
-    time_window: str = "7d",
-    language: str = "ko",
-    max_results: int = 20
+    query: str, time_window: str = "7d", language: str = "ko", max_results: int = 20
 ) -> NewsAgentState:
     """
     Run agent with advanced features (synchronous version)
@@ -600,7 +649,7 @@ def run_agent_advanced(
         time_window=time_window,
         language=language,
         max_results=max_results,
-        run_id=run_id
+        run_id=run_id,
     )
 
     graph = build_advanced_graph()
@@ -608,13 +657,14 @@ def run_agent_advanced(
     try:
         # Use ainvoke via asyncio.run for async graph execution
         import asyncio
+
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         try:
             final_state = loop.run_until_complete(graph.ainvoke(initial_state))
         finally:
             loop.close()
-            
+
         logger.info("Advanced agent completed successfully")
     except Exception as e:
         logger.error("Advanced agent failed", error=str(e))
