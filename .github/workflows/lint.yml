@@ -30,13 +30,13 @@ jobs:
 
       - name: Check code formatting with Black
         run: |
-          black --check agents/ tests/
+          black --check src/ tests/
 
       - name: Lint with Ruff
         run: |
-          ruff check agents/ tests/
+          ruff check src/ tests/
 
       - name: Type check with mypy (optional)
         continue-on-error: true
         run: |
-          mypy agents/ --ignore-missing-imports
+          mypy src/ --ignore-missing-imports
