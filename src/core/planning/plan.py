@@ -79,17 +79,28 @@ def get_retry_policy_for_step(steps: List[Dict[str, Any]], step_id: Optional[str
     return dict(rp) if isinstance(rp, dict) else {}
 
 
-def get_retry_policy_for_op(steps: List[Dict[str, Any]], op_prefix: str) -> Dict[str, Any]:
+def get_retry_policy_for_op(steps: List[Any], op_prefix: str) -> Dict[str, Any]:
+    """Get retry policy for an operation prefix.
+
+    Supports both formats:
+    - List of dicts: [{'op': 'collect', 'retry_policy': {...}}, ...]
+    - List of strings: ['Collect', 'Normalize', ...] (returns empty dict)
+    """
     p = (op_prefix or "").strip().lower()
     if not p:
         return {}
     if not steps:
         return {}
     for s in steps:
-        op = s.get("op")
-        if isinstance(op, str) and op.strip().lower().startswith(p):
-            rp = s.get("retry_policy")
-            return dict(rp) if isinstance(rp, dict) else {}
+        # Handle dict format
+        if isinstance(s, dict):
+            op = s.get("op")
+            if isinstance(op, str) and op.strip().lower().startswith(p):
+                rp = s.get("retry_policy")
+                return dict(rp) if isinstance(rp, dict) else {}
+        # Handle string format (no retry policy available)
+        elif isinstance(s, str) and s.strip().lower().startswith(p):
+            return {}
     return {}
 
 
@@ -101,17 +112,28 @@ def get_timeout_for_step(steps: List[Dict[str, Any]], step_id: Optional[str]) ->
     return int(v) if isinstance(v, int) and v > 0 else None
 
 
-def get_timeout_for_op(steps: List[Dict[str, Any]], op_prefix: str) -> Optional[int]:
+def get_timeout_for_op(steps: List[Any], op_prefix: str) -> Optional[int]:
+    """Get timeout for an operation prefix.
+
+    Supports both formats:
+    - List of dicts: [{'op': 'collect', 'timeout_seconds': 30}, ...]
+    - List of strings: ['Collect', 'Normalize', ...] (returns None)
+    """
     p = (op_prefix or "").strip().lower()
     if not p:
         return None
     if not steps:
         return None
     for s in steps:
-        op = s.get("op")
-        if isinstance(op, str) and op.strip().lower().startswith(p):
-            v = s.get("timeout_seconds")
-            return int(v) if isinstance(v, int) and v > 0 else None
+        # Handle dict format
+        if isinstance(s, dict):
+            op = s.get("op")
+            if isinstance(op, str) and op.strip().lower().startswith(p):
+                v = s.get("timeout_seconds")
+                return int(v) if isinstance(v, int) and v > 0 else None
+        # Handle string format (no timeout available)
+        elif isinstance(s, str) and s.strip().lower().startswith(p):
+            return None
     return None
 
 
@@ -123,14 +145,25 @@ def get_circuit_breaker_for_step(steps: List[Dict[str, Any]], step_id: Optional[
     return dict(cb) if isinstance(cb, dict) else {}
 
 
-def step_ops(steps: List[Dict[str, Any]]) -> List[str]:
+def step_ops(steps: List[Any]) -> List[str]:
+    """Extract operation names from steps.
+
+    Supports both formats:
+    - List of dicts: [{'op': 'collect', ...}, {'op': 'normalize', ...}]
+    - List of strings: ['Collect', 'Normalize', ...]
+    """
     ops: List[str] = []
     if not steps:
         return ops
     for s in steps:
-        op = s.get("op")
-        if isinstance(op, str) and op.strip():
-            ops.append(op.strip())
+        # Handle dict format: {'op': 'collect', ...}
+        if isinstance(s, dict):
+            op = s.get("op")
+            if isinstance(op, str) and op.strip():
+                ops.append(op.strip())
+        # Handle string format: 'Collect', 'Normalize', etc.
+        elif isinstance(s, str) and s.strip():
+            ops.append(s.strip())
     return ops
 
 
@@ -144,17 +177,28 @@ def has_step(steps: List[Dict[str, Any]], op_prefix: str) -> bool:
     return False
 
 
-def get_first_step_params(steps: List[Dict[str, Any]], op_prefix: str) -> Dict[str, Any]:
+def get_first_step_params(steps: List[Any], op_prefix: str) -> Dict[str, Any]:
+    """Get params for the first step matching an operation prefix.
+
+    Supports both formats:
+    - List of dicts: [{'op': 'collect', 'params': {...}}, ...]
+    - List of strings: ['Collect', 'Normalize', ...] (returns empty dict)
+    """
     p = (op_prefix or "").strip().lower()
     if not p:
         return {}
     if not steps:
         return {}
     for s in steps:
-        op = s.get("op")
-        if isinstance(op, str) and op.strip().lower().startswith(p):
-            params = s.get("params")
-            return dict(params) if isinstance(params, dict) else {}
+        # Handle dict format
+        if isinstance(s, dict):
+            op = s.get("op")
+            if isinstance(op, str) and op.strip().lower().startswith(p):
+                params = s.get("params")
+                return dict(params) if isinstance(params, dict) else {}
+        # Handle string format (no params available)
+        elif isinstance(s, str) and s.strip().lower().startswith(p):
+            return {}
     return {}
 
 

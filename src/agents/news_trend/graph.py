@@ -209,6 +209,16 @@ def analyze_node(state: NewsAgentState) -> Dict[str, Any]:
         raise_on_fail=strict,
     )
 
+    analysis = {
+        "sentiment": sentiment_results,
+        "keywords": keyword_results,
+        "total_items": len(state.normalized)
+    }
+
+    logger.node_end("analyze", output_size=len(state.normalized))
+
+    return {"analysis": analysis}
+
 
 def rag_node(state: NewsAgentState) -> Dict[str, Any]:
     """
@@ -236,16 +246,6 @@ def rag_node(state: NewsAgentState) -> Dict[str, Any]:
 
     logger.node_end("rag", output_size=len(relevant))
     return {"analysis": {**state.analysis, "_rag_relevant": relevant}}
-
-    analysis = {
-        "sentiment": sentiment_results,
-        "keywords": keyword_results,
-        "total_items": len(state.normalized)
-    }
-
-    logger.node_end("analyze", output_size=len(state.normalized))
-
-    return {"analysis": analysis}
 
 
 def summarize_node(state: NewsAgentState) -> Dict[str, Any]:
