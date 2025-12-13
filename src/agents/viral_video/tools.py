@@ -2,10 +2,9 @@
 Tools for Viral Video Agent
 """
 
-import os
 import random
 import logging
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any
 from datetime import datetime, timedelta
 
 from src.integrations.mcp.sns_collect import (

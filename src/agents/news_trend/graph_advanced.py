@@ -11,7 +11,6 @@ References:
 - Streaming: https://langchain-ai.github.io/langgraph/how-tos/stream-values/
 """
 
-import os
 import uuid
 import logging
 from typing import Dict, Any, Literal
@@ -407,19 +406,19 @@ def report_node(state: NewsAgentState) -> Dict[str, Any]:
     keywords = state.analysis.get("keywords", {}).get("top_keywords", [])
 
     report_lines = [
-        f"# 뉴스 트렌드 분석 리포트",
-        f"",
+        "# 뉴스 트렌드 분석 리포트",
+        "",
         f"**검색어**: {state.query}",
         f"**기간**: {state.time_window or '7d'}",
         f"**분석 항목**: {len(state.normalized)}건",
-        f"",
-        f"## 📊 감성 분석",
+        "",
+        "## 📊 감성 분석",
         f"- 긍정: {sentiment.get('positive', 0)}건 ({sentiment.get('positive_pct', 0):.1f}%)",
         f"- 중립: {sentiment.get('neutral', 0)}건 ({sentiment.get('neutral_pct', 0):.1f}%)",
         f"- 부정: {sentiment.get('negative', 0)}건 ({sentiment.get('negative_pct', 0):.1f}%)",
-        f"",
-        f"## 🔑 핵심 키워드",
-        f"",
+        "",
+        "## 🔑 핵심 키워드",
+        "",
     ]
 
     for kw in keywords[:10]:
@@ -427,11 +426,11 @@ def report_node(state: NewsAgentState) -> Dict[str, Any]:
 
     report_lines.extend(
         [
-            f"",
-            f"## 💡 주요 인사이트",
-            f"",
+            "",
+            "## 💡 주요 인사이트",
+            "",
             state.analysis.get("summary", "No summary available."),
-            f"",
+            "",
             f"**Run ID**: `{state.run_id}`",
         ]
     )

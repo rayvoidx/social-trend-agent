@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import os
-import json
 import uuid
 import logging
 from pathlib import Path
@@ -14,7 +12,6 @@ from langgraph.graph import StateGraph, END
 from src.core.state import SocialTrendAgentState
 from src.core.logging import AgentLogger
 from src.core.errors import safe_api_call
-from src.core.config import get_config_manager
 from src.core.checkpoint import get_checkpointer
 from src.agents.social_trend.tools import (
     fetch_x_posts,
@@ -42,7 +39,7 @@ from src.core.planning.graph import build_plan_runner_graph
 
 try:
     # Check LangChain availability
-    import langchain
+    import langchain  # noqa: F401
 
     LANGCHAIN_AVAILABLE = True
 except ImportError:
@@ -516,7 +513,7 @@ def _write_report(
     llm_insights: str = "",
 ) -> None:
     lines = []
-    lines.append(f"# Social Trend Report")
+    lines.append("# Social Trend Report")
     lines.append("")
     lines.append(f"- **Query**: {query}")
     lines.append(f"- **Time Window**: {time_window}")

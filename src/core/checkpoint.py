@@ -2,7 +2,6 @@
 LangGraph Checkpointer Utilities
 """
 
-from typing import Optional
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.checkpoint.memory import MemorySaver
 

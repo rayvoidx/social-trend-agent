@@ -57,7 +57,7 @@ class LoggingMiddleware(BaseHTTPMiddleware):
 
         # Log request
         logger.info(
-            f"Request started",
+            "Request started",
             extra={
                 "run_id": run_id,
                 "method": method,
@@ -76,7 +76,7 @@ class LoggingMiddleware(BaseHTTPMiddleware):
             status_code = 500
             success = False
             logger.error(
-                f"Request failed with exception",
+                "Request failed with exception",
                 extra={
                     "run_id": run_id,
                     "error": str(e),
@@ -92,7 +92,7 @@ class LoggingMiddleware(BaseHTTPMiddleware):
             log_level = logging.INFO if success else logging.WARNING
             logger.log(
                 log_level,
-                f"Request completed",
+                "Request completed",
                 extra={
                     "run_id": run_id,
                     "method": method,
@@ -162,17 +162,8 @@ class MetricsMiddleware(BaseHTTPMiddleware):
         status_code = 500
 
         try:
-            response = await call_next(request)
-            status_code = response.status_code
-            return response
-
+            return await call_next(request)
         finally:
-            duration = time.time() - start_time
-
-            # Record detailed metrics
-            path = self._normalize_path(request.url.path)
-            method = request.method
-
             # Decrement active requests
             if active_gauge:
                 active_gauge.labels(job_type="http_request").dec()
@@ -366,7 +357,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
             # Log
             logger.warning(
-                f"Rate limit exceeded",
+                "Rate limit exceeded",
                 extra={"identifier": identifier, "path": request.url.path, "info": info},
             )
 

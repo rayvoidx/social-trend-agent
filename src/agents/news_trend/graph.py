@@ -89,6 +89,9 @@ def router_node(state: NewsAgentState) -> Dict[str, Any]:
 
 
 def collect_node(state: NewsAgentState) -> Dict[str, Any]:
+    run_id = state.run_id or "unknown"
+    logger = AgentLogger("news_trend_agent", run_id)
+
     # If plan explicitly omits collect, skip it (plan==DAG strong binding)
     steps = state.plan.get("steps") if isinstance(state.plan, dict) else []
     if isinstance(steps, list) and steps and not has_step(steps, "collect"):
@@ -98,8 +101,6 @@ def collect_node(state: NewsAgentState) -> Dict[str, Any]:
     """
     다양한 소스에서 뉴스 데이터 수집
     """
-    run_id = state.run_id or "unknown"
-    logger = AgentLogger("news_trend_agent", run_id)
     logger.node_start("collect")
     logger.info(f"Collecting news: query={state.query}, time_window={state.time_window}")
 
@@ -379,17 +380,17 @@ def report_node(state: NewsAgentState) -> Dict[str, Any]:
 
     # Build markdown report
     report_lines = [
-        f"# 뉴스 트렌드 분석 리포트",
-        f"",
+        "# 뉴스 트렌드 분석 리포트",
+        "",
         f"**검색어**: {state.query}",
         f"**기간**: {state.time_window or '7d'}",
         f"**언어**: {state.language}",
         f"**분석 항목 수**: {len(state.normalized)}",
-        f"",
-        f"---",
-        f"",
-        f"## 📊 감성 분석",
-        f"",
+        "",
+        "---",
+        "",
+        "## 📊 감성 분석",
+        "",
     ]
 
     sentiment = state.analysis.get("sentiment", {})
@@ -398,11 +399,11 @@ def report_node(state: NewsAgentState) -> Dict[str, Any]:
             f"- 긍정: {sentiment.get('positive', 0)}개 ({sentiment.get('positive_pct', 0):.1f}%)",
             f"- 중립: {sentiment.get('neutral', 0)}개 ({sentiment.get('neutral_pct', 0):.1f}%)",
             f"- 부정: {sentiment.get('negative', 0)}개 ({sentiment.get('negative_pct', 0):.1f}%)",
-            f"",
-            f"---",
-            f"",
-            f"## 🔑 핵심 키워드",
-            f"",
+            "",
+            "---",
+            "",
+            "## 🔑 핵심 키워드",
+            "",
         ]
     )
 
@@ -412,13 +413,13 @@ def report_node(state: NewsAgentState) -> Dict[str, Any]:
 
     report_lines.extend(
         [
-            f"",
-            f"---",
-            f"",
-            f"## 💡 주요 인사이트",
-            f"",
+            "",
+            "---",
+            "",
+            "## 💡 주요 인사이트",
+            "",
             state.analysis.get("summary", "No summary available."),
-            f"",
+            "",
         ]
     )
 
@@ -428,26 +429,26 @@ def report_node(state: NewsAgentState) -> Dict[str, Any]:
         if safety.get("pii_found") or safety.get("unsafe"):
             report_lines.extend(
                 [
-                    f"---",
-                    f"",
-                    f"## 🔒 안전 및 프라이버시",
-                    f"",
-                    f"- 일부 PII 정보가 마스킹되었습니다." if safety.get("pii_found") else "",
+                    "---",
+                    "",
+                    "## 🔒 안전 및 프라이버시",
+                    "",
+                    "- 일부 PII 정보가 마스킹되었습니다." if safety.get("pii_found") else "",
                     (
                         f"- 안전 카테고리 감지: {', '.join(safety.get('categories', []))}"
                         if safety.get("unsafe")
                         else ""
                     ),
-                    f"",
+                    "",
                 ]
             )
 
     report_lines.extend(
         [
-            f"---",
-            f"",
-            f"## 📰 주요 뉴스 (Top 5)",
-            f"",
+            "---",
+            "",
+            "## 📰 주요 뉴스 (Top 5)",
+            "",
         ]
     )
 
@@ -457,21 +458,21 @@ def report_node(state: NewsAgentState) -> Dict[str, Any]:
                 f"### {i}. {item['title']}",
                 f"**출처**: [{item['source']}]({item['url']})",
                 f"**발행일**: {item['published_at']}",
-                f"",
+                "",
                 f"{item['description']}",
-                f"",
+                "",
             ]
         )
 
     report_lines.extend(
         [
-            f"---",
-            f"",
-            f"**⚠️ 주의**: 본 리포트는 AI가 생성한 분석으로, 사실 확인이 필요합니다.",
-            f"출처 링크를 반드시 확인하세요.",
-            f"",
+            "---",
+            "",
+            "**⚠️ 주의**: 본 리포트는 AI가 생성한 분석으로, 사실 확인이 필요합니다.",
+            "출처 링크를 반드시 확인하세요.",
+            "",
             f"**Run ID**: `{state.run_id}`",
-            f"",
+            "",
         ]
     )
 

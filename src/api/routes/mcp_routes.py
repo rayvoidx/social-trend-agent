@@ -6,9 +6,8 @@ MCP 서버의 도구들을 REST API로 노출합니다.
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
-from typing import Optional, List, Any
+from typing import Optional
 import logging
-import json
 
 logger = logging.getLogger(__name__)
 

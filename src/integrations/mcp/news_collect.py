@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """
 뉴스 데이터 수집용 MCP 클라이언트 래퍼
 
@@ -7,10 +5,12 @@ from __future__ import annotations
 - NewsAPI / Naver News API와 같은 직접 HTTP 기반 수집은 사용하지 않습니다.
 """
 
+from __future__ import annotations
+
 import asyncio
 import logging
 import threading
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from src.integrations.mcp.servers.mcp_client import call_mcp_tool
 

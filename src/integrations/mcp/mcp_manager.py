@@ -90,7 +90,7 @@ class MCPManager:
                         },
                     }
                 )
-                logger.info(f"✅ Registered Brave Search tool")
+                logger.info("✅ Registered Brave Search tool")
             else:
                 logger.warning(f"⚠️  BRAVE_API_KEY not set, skipping {server_name}")
 
@@ -138,7 +138,7 @@ class MCPManager:
                     },
                 }
             )
-            logger.info(f"✅ Registered Filesystem tools")
+            logger.info("✅ Registered Filesystem tools")
 
         # PostgreSQL MCP
         elif server_name == "postgres":
@@ -163,7 +163,7 @@ class MCPManager:
                         },
                     }
                 )
-                logger.info(f"✅ Registered PostgreSQL tool")
+                logger.info("✅ Registered PostgreSQL tool")
             else:
                 logger.warning(f"⚠️  DATABASE_URL not set, skipping {server_name}")
 

@@ -5,7 +5,7 @@ MCP Utilities
 import asyncio
 import logging
 import functools
-from typing import TypeVar, Callable, Any, Awaitable
+from typing import TypeVar, Callable, Awaitable
 
 logger = logging.getLogger(__name__)
 

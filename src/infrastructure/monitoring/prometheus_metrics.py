@@ -16,7 +16,7 @@ import logging
 import time
 from contextlib import contextmanager
 from functools import wraps
-from typing import Any, Callable, Dict, Optional, List, Union
+from typing import Any, Callable, Dict, Optional, List
 
 try:
     from prometheus_client import (
@@ -24,10 +24,8 @@ try:
         Gauge,
         Histogram,
         Info,
-        CollectorRegistry,
         generate_latest,
         CONTENT_TYPE_LATEST,
-        multiprocess,
         REGISTRY,
     )
 
@@ -637,7 +635,7 @@ def track_agent_run(agent_name: str):
                 result = func(*args, **kwargs)
                 return result
 
-            except Exception as e:
+            except Exception:
                 success = False
                 raise
 

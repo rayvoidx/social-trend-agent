@@ -3,7 +3,7 @@ Retrieval utility functions.
 """
 
 import logging
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any
 import hashlib
 
 logger = logging.getLogger(__name__)

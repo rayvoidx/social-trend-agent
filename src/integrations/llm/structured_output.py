@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 import logging
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from pydantic import BaseModel, Field, validator
 
@@ -199,7 +199,6 @@ def self_refine_output(
     Returns:
         개선된 출력
     """
-    client = get_llm_client()
     current_output = initial_output
 
     for iteration in range(max_iterations):

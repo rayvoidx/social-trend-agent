@@ -6,7 +6,7 @@ Provides tools for evaluating agent outputs and measuring quality metrics.
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 
 class QualityLevel(Enum):

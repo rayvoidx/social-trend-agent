@@ -181,7 +181,7 @@ async def startup_event():
                 time_window=params.get("time_window"),
                 language=params.get("language"),
             )
-            routing = orch.get("routing") if isinstance(orch, dict) else {}
+            # routing = orch.get("routing") if isinstance(orch, dict) else {}
             plan = (orch.get("plan") if isinstance(orch, dict) else {}) or {}
             agents = plan.get("agents") if isinstance(plan, dict) else None
             if not isinstance(agents, list) or not agents:

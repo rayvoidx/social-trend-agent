@@ -12,7 +12,7 @@ This is intentionally lightweight: it's a "manager" that routes, not a new heavy
 from __future__ import annotations
 
 import os
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 from src.core.gateway import route_request
 from src.core.routing import ModelRole, get_model_for_role

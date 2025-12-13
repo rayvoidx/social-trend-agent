@@ -7,7 +7,6 @@ YouTube 영상 고급 분석 모듈
 from __future__ import annotations
 
 import logging
-import os
 import subprocess
 import tempfile
 from pathlib import Path
@@ -69,7 +68,7 @@ class YouTubeAnalyzer:
         for lang in languages:
             try:
                 # 자막 다운로드 (SRT 형식)
-                output_template = str(output_dir / f"%(id)s.%(ext)s")
+                output_template = str(output_dir / "%(id)s.%(ext)s")
                 cmd = [
                     self.yt_dlp_path,
                     "--write-sub",
@@ -177,7 +176,7 @@ class YouTubeAnalyzer:
             current_segment_text: List[str] = []
 
             for block in blocks:
-                lines = [l.strip() for l in block.split("\n") if l.strip()]
+                lines = [line.strip() for line in block.split("\n") if line.strip()]
                 if len(lines) < 2:
                     continue
 
@@ -196,7 +195,7 @@ class YouTubeAnalyzer:
                 end_seconds = self._parse_timecode(end_str.strip())
 
                 # 텍스트 추출
-                text_lines = [l for l in lines if "-->" not in l and not l.isdigit()]
+                text_lines = [line for line in lines if "-->" not in line and not line.isdigit()]
                 text = " ".join(text_lines)
 
                 # 세그먼트 분할

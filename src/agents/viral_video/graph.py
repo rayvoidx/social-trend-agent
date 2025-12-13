@@ -249,18 +249,18 @@ def report_node(state: ViralAgentState) -> Dict[str, Any]:
 
     # Build markdown report
     report_lines = [
-        f"# 바이럴 영상 분석 리포트",
-        f"",
+        "# 바이럴 영상 분석 리포트",
+        "",
         f"**검색어**: {state.query}",
         f"**시장**: {state.market}",
         f"**플랫폼**: {', '.join(state.platforms)}",
         f"**기간**: {state.time_window or '24h'}",
         f"**분석 영상 수**: {len(state.normalized)}",
-        f"",
-        f"---",
-        f"",
-        f"## 🚀 급상승 영상 (Spike Detection)",
-        f"",
+        "",
+        "---",
+        "",
+        "## 🚀 급상승 영상 (Spike Detection)",
+        "",
     ]
 
     spikes = state.analysis.get("spikes", {})
@@ -279,7 +279,7 @@ def report_node(state: ViralAgentState) -> Dict[str, Any]:
                     f"**좋아요**: {video['likes']:,}",
                     f"**URL**: [{video['platform']}]({video['url']})",
                     f"**Z-Score**: {video.get('z_score', 0):.2f}",
-                    f"",
+                    "",
                 ]
             )
     else:
@@ -288,10 +288,10 @@ def report_node(state: ViralAgentState) -> Dict[str, Any]:
 
     report_lines.extend(
         [
-            f"---",
-            f"",
-            f"## 📊 토픽 클러스터",
-            f"",
+            "---",
+            "",
+            "## 📊 토픽 클러스터",
+            "",
         ]
     )
 
@@ -302,25 +302,25 @@ def report_node(state: ViralAgentState) -> Dict[str, Any]:
                 f"### {i}. {cluster['topic']}",
                 f"**영상 수**: {cluster['count']}개",
                 f"**평균 조회수**: {cluster['avg_views']:,}",
-                f"",
+                "",
             ]
         )
 
     report_lines.extend(
         [
-            f"---",
-            f"",
-            f"## 💡 성공 요인 분석",
-            f"",
+            "---",
+            "",
+            "## 💡 성공 요인 분석",
+            "",
             state.analysis.get("success_factors", "No success factors available."),
-            f"",
-            f"---",
-            f"",
-            f"**⚠️ 주의**: 본 리포트는 AI가 생성한 분석으로, 사실 확인이 필요합니다.",
-            f"출처 링크를 반드시 확인하세요.",
-            f"",
+            "",
+            "---",
+            "",
+            "**⚠️ 주의**: 본 리포트는 AI가 생성한 분석으로, 사실 확인이 필요합니다.",
+            "출처 링크를 반드시 확인하세요.",
+            "",
             f"**Run ID**: `{state.run_id}`",
-            f"",
+            "",
         ]
     )
 
@@ -401,7 +401,7 @@ def notify_node(state: ViralAgentState) -> Dict[str, Any]:
             ]
 
             slack_message: Dict[str, Any] = {
-                "text": f"🔥 Viral Video Analysis Complete",
+                "text": "🔥 Viral Video Analysis Complete",
                 "blocks": blocks,
             }
 

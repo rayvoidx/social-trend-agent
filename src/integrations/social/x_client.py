@@ -11,9 +11,8 @@ from __future__ import annotations
 
 import logging
 import os
-import time
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
 try:
     import requests

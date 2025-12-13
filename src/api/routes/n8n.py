@@ -384,7 +384,7 @@ async def send_slack_notification(result: Dict[str, Any], request: N8NAgentReque
 
     try:
         message = {
-            "text": f"✅ 에이전트 분석 완료",
+            "text": "✅ 에이전트 분석 완료",
             "blocks": [
                 {
                     "type": "section",

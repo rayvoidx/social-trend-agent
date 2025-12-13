@@ -3,11 +3,11 @@ Self-Refinement Utilities
 """
 
 import logging
-from typing import Optional, Dict, Any, Type, TypeVar
+from typing import Optional, Type, TypeVar
 from pydantic import BaseModel
 
 from src.integrations.llm.llm_client import LLMClient
-from src.domain.schemas import TrendInsight, QualityCheck, RefinementResult
+from src.domain.schemas import QualityCheck
 
 logger = logging.getLogger(__name__)
 
