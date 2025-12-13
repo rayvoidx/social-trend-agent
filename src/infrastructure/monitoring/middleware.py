@@ -158,9 +158,6 @@ class MetricsMiddleware(BaseHTTPMiddleware):
         if active_gauge:
             active_gauge.labels(job_type="http_request").inc()
 
-        start_time = time.time()
-        status_code = 500
-
         try:
             return await call_next(request)
         finally:
