@@ -31,6 +31,10 @@ from src.infrastructure.monitoring import (
     get_metrics as prometheus_generate_latest,
     get_metrics_content_type,
 )
+from src.infrastructure.storage.async_redis_cache import (
+    get_async_cache,
+    cache_key_from_request,
+)
 from src.domain.models import Insight, InsightSource, INSIGHT_REPOSITORY, MISSION_REPOSITORY
 from src.domain.models import save_insight_from_result
 from src.domain.mission import generate_missions_from_insight, recommend_creators_for_mission
@@ -61,6 +65,9 @@ app.include_router(mcp_router)
 
 # Global executor (initialized on startup)
 executor: Optional[DistributedAgentExecutor] = None
+
+# Global async cache
+cache = get_async_cache(prefix="api")
 
 
 # ============================================================================
@@ -364,6 +371,17 @@ async def list_insights(
 
     기본적으로 최신 생성 순으로 정렬된 인사이트 요약 정보를 반환합니다.
     """
+    # Generate cache key from query parameters
+    cache_key = cache_key_from_request(
+        path="/api/insights",
+        query_params={"source": source, "query": query, "limit": limit},
+    )
+
+    # Try cache first
+    cached_result = await cache.get(cache_key)
+    if cached_result is not None:
+        return cached_result
+
     insights = list(INSIGHT_REPOSITORY.list())
 
     # 필터링
@@ -398,7 +416,12 @@ async def list_insights(
         for i in insights
     ]
 
-    return {"total": len(items), "items": items}
+    result = {"total": len(items), "items": items}
+
+    # Cache for 5 minutes (insights don't change frequently)
+    await cache.set(cache_key, result, ttl=300)
+
+    return result
 
 
 @app.get("/api/insights/{insight_id}", response_model=Insight)
@@ -467,6 +490,17 @@ async def list_tasks(status: Optional[str] = None, limit: int = 50):
     if not executor:
         raise HTTPException(status_code=503, detail="Executor not initialized")
 
+    # Generate cache key
+    cache_key = cache_key_from_request(
+        path="/api/tasks",
+        query_params={"status": status, "limit": limit},
+    )
+
+    # Try cache (short TTL since tasks change frequently)
+    cached_result = await cache.get(cache_key)
+    if cached_result is not None:
+        return cached_result
+
     all_tasks = await executor.task_queue.get_all_tasks()
 
     # Filter by status if specified
@@ -482,7 +516,12 @@ async def list_tasks(status: Optional[str] = None, limit: int = 50):
     # Sort by created_at (newest first) and limit
     tasks = sorted(tasks, key=lambda t: t.created_at, reverse=True)[:limit]
 
-    return {"total": len(tasks), "tasks": [t.to_dict() for t in tasks]}
+    result = {"total": len(tasks), "tasks": [t.to_dict() for t in tasks]}
+
+    # Cache for 30 seconds (tasks change frequently)
+    await cache.set(cache_key, result, ttl=30)
+
+    return result
 
 
 @app.get("/api/tasks/{task_id}", response_model=TaskResponse)
@@ -539,6 +578,9 @@ async def submit_task(request: TaskSubmitRequest, background_tasks: BackgroundTa
         agent_name=request.agent_name, query=request.query, params=request.params, priority=priority
     )
 
+    # Invalidate tasks cache
+    await cache.invalidate_pattern("tasks:*")
+
     return {
         "task_id": task_id,
         "status": "submitted",
@@ -580,6 +622,12 @@ async def get_statistics():
     if not executor:
         raise HTTPException(status_code=503, detail="Executor not initialized")
 
+    # Try cache first (expensive operation)
+    cache_key = "statistics:summary"
+    cached_result = await cache.get(cache_key)
+    if cached_result is not None:
+        return cached_result
+
     # Executor stats
     executor_stats = await executor.get_statistics()
 
@@ -615,12 +663,17 @@ async def get_statistics():
     except Exception:
         perf_stats = {}
 
-    return {
+    result = {
         "timestamp": datetime.now().isoformat(),
         "executor": executor_stats,
         "agents": agent_stats,
         "performance": perf_stats,
     }
+
+    # Cache for 60 seconds (expensive to compute)
+    await cache.set(cache_key, result, ttl=60)
+
+    return result
 
 
 @app.post("/api/missions/recommend")
