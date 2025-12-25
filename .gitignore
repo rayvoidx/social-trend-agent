@@ -45,16 +45,11 @@ secrets.json
 # IDE
 .vscode/
 .idea/
+.claude/
 *.swp
 *.swo
 *~
 .DS_Store
-
-# Claude Code (local settings only)
-.claude/settings.local.json
-.claude/CLAUDE.local.md
-.claude/*.local.*
-!.claude/settings.local.json.example
 
 # Database
 *.db
