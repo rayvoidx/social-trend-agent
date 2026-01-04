@@ -2,14 +2,57 @@
 MCP 도구 API 라우트
 
 MCP 서버의 도구들을 REST API로 노출합니다.
+
+Performance optimizations:
+- Redis caching for frequently accessed data
+- asyncio.to_thread for sync I/O operations
+- Singleton pattern for MCP objects
 """
 
+import asyncio
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 from typing import Optional
 import logging
 
+from src.infrastructure.storage.async_redis_cache import (
+    get_async_cache,
+    cache_key_from_request,
+)
+
 logger = logging.getLogger(__name__)
+
+# Singleton MCP instances (avoid repeated instantiation)
+_web_search_mcp = None
+_http_mcp = None
+_youtube_mcp = None
+
+
+def get_web_search_mcp():
+    """Get singleton WebSearchMCP instance."""
+    global _web_search_mcp
+    if _web_search_mcp is None:
+        from src.mcp import WebSearchMCP
+        _web_search_mcp = WebSearchMCP()
+    return _web_search_mcp
+
+
+def get_http_mcp():
+    """Get singleton HttpMCP instance."""
+    global _http_mcp
+    if _http_mcp is None:
+        from src.mcp import HttpMCP
+        _http_mcp = HttpMCP()
+    return _http_mcp
+
+
+def get_youtube_mcp():
+    """Get singleton YouTubeMCP instance."""
+    global _youtube_mcp
+    if _youtube_mcp is None:
+        from src.mcp import YouTubeMCP
+        _youtube_mcp = YouTubeMCP()
+    return _youtube_mcp
 
 router = APIRouter(prefix="/api/mcp", tags=["MCP Tools"])
 
@@ -72,14 +115,29 @@ async def web_search(request: WebSearchRequest):
     웹 검색 수행
 
     Brave Search 또는 SerpAPI를 사용하여 웹 검색을 수행합니다.
+    캐싱: 동일 쿼리는 5분간 캐시됩니다.
     """
     try:
-        from src.mcp import WebSearchMCP
+        # Check cache first
+        cache = get_async_cache(prefix="mcp")
+        cache_key = cache_key_from_request(
+            "/web-search", {"query": request.query, "top_k": request.top_k}
+        )
+        cached = await cache.get(cache_key)
+        if cached is not None:
+            logger.debug(f"Cache hit for web search: {request.query}")
+            return cached
 
-        search = WebSearchMCP()
-        urls = search.search(request.query, request.top_k)
+        # Use singleton and run sync I/O in thread pool
+        search = get_web_search_mcp()
+        urls = await asyncio.to_thread(search.search, request.query, request.top_k)
 
-        return {"query": request.query, "count": len(urls), "urls": urls}
+        result = {"query": request.query, "count": len(urls), "urls": urls}
+
+        # Cache for 5 minutes
+        await cache.set(cache_key, result, ttl=300)
+
+        return result
     except Exception as e:
         logger.error(f"Web search failed: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
@@ -91,12 +149,23 @@ async def fetch_url(request: FetchUrlRequest):
     URL에서 콘텐츠 가져오기
 
     지정된 URL에서 텍스트 또는 JSON 콘텐츠를 가져옵니다.
+    캐싱: URL 콘텐츠는 10분간 캐시됩니다.
     """
     try:
-        from src.mcp import HttpMCP
+        # Check cache first
+        cache = get_async_cache(prefix="mcp")
+        cache_key = cache_key_from_request("/fetch-url", {"url": request.url})
+        cached = await cache.get(cache_key)
+        if cached is not None:
+            logger.debug(f"Cache hit for fetch URL: {request.url}")
+            return cached
 
-        http = HttpMCP()
-        result = http.fetch(request.url)
+        # Use singleton and run sync I/O in thread pool
+        http = get_http_mcp()
+        result = await asyncio.to_thread(http.fetch, request.url)
+
+        # Cache for 10 minutes
+        await cache.set(cache_key, result, ttl=600)
 
         return result
     except Exception as e:
@@ -108,11 +177,22 @@ async def fetch_url(request: FetchUrlRequest):
 async def list_insights(source: Optional[str] = None, limit: int = 10):
     """
     저장된 인사이트 목록 조회
+    캐싱: 2분간 캐시됩니다.
     """
     try:
+        # Check cache first
+        cache = get_async_cache(prefix="mcp")
+        cache_key = cache_key_from_request(
+            "/insights", {"source": source, "limit": limit}
+        )
+        cached = await cache.get(cache_key)
+        if cached is not None:
+            return cached
+
         from src.domain.models import INSIGHT_REPOSITORY, InsightSource
 
-        insights = list(INSIGHT_REPOSITORY.list())
+        # Run sync repository access in thread pool
+        insights = await asyncio.to_thread(lambda: list(INSIGHT_REPOSITORY.list()))
 
         # 소스 필터링
         if source:
@@ -141,7 +221,12 @@ async def list_insights(source: Optional[str] = None, limit: int = 10):
                 }
             )
 
-        return {"total": len(items), "items": items}
+        result = {"total": len(items), "items": items}
+
+        # Cache for 2 minutes
+        await cache.set(cache_key, result, ttl=120)
+
+        return result
     except Exception as e:
         logger.error(f"List insights failed: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
@@ -212,19 +297,41 @@ async def recommend_missions(request: MissionRecommendRequest):
 async def youtube_search(request: YouTubeSearchRequest):
     """
     YouTube 영상 검색
+    캐싱: 동일 검색은 10분간 캐시됩니다.
     """
     try:
-        from src.mcp import YouTubeMCP
+        # Check cache first
+        cache = get_async_cache(prefix="mcp")
+        cache_key = cache_key_from_request(
+            "/youtube/search",
+            {
+                "query": request.query,
+                "max_results": request.max_results,
+                "channel_id": request.channel_id,
+            },
+        )
+        cached = await cache.get(cache_key)
+        if cached is not None:
+            return cached
 
-        youtube = YouTubeMCP()
+        youtube = get_youtube_mcp()
         if not youtube.youtube:
             raise HTTPException(status_code=503, detail="YouTube API not configured")
 
-        videos = youtube.search_videos(
-            query=request.query, max_results=request.max_results, channel_id=request.channel_id
+        # Run sync I/O in thread pool
+        videos = await asyncio.to_thread(
+            youtube.search_videos,
+            query=request.query,
+            max_results=request.max_results,
+            channel_id=request.channel_id,
         )
 
-        return {"query": request.query, "count": len(videos), "videos": videos}
+        result = {"query": request.query, "count": len(videos), "videos": videos}
+
+        # Cache for 10 minutes
+        await cache.set(cache_key, result, ttl=600)
+
+        return result
     except HTTPException:
         raise
     except Exception as e:
@@ -236,26 +343,46 @@ async def youtube_search(request: YouTubeSearchRequest):
 async def youtube_channel_videos(request: YouTubeChannelRequest):
     """
     YouTube 채널 영상 목록
+    캐싱: 채널 영상 목록은 15분간 캐시됩니다.
     """
     try:
-        from src.mcp import YouTubeMCP
+        # Check cache first
+        cache = get_async_cache(prefix="mcp")
+        cache_key = cache_key_from_request(
+            "/youtube/channel-videos",
+            {
+                "channel_id": request.channel_id,
+                "channel_handle": request.channel_handle,
+                "max_results": request.max_results,
+            },
+        )
+        cached = await cache.get(cache_key)
+        if cached is not None:
+            return cached
 
-        youtube = YouTubeMCP()
+        youtube = get_youtube_mcp()
         if not youtube.youtube:
             raise HTTPException(status_code=503, detail="YouTube API not configured")
 
-        videos = youtube.get_channel_videos(
+        # Run sync I/O in thread pool
+        videos = await asyncio.to_thread(
+            youtube.get_channel_videos,
             channel_id=request.channel_id,
             channel_username=request.channel_handle,
             max_results=request.max_results,
         )
 
-        return {
+        result = {
             "channel_id": request.channel_id,
             "channel_handle": request.channel_handle,
             "count": len(videos),
             "videos": videos,
         }
+
+        # Cache for 15 minutes
+        await cache.set(cache_key, result, ttl=900)
+
+        return result
     except HTTPException:
         raise
     except Exception as e:

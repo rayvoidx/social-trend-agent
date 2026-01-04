@@ -2,6 +2,11 @@
 n8n Webhook API Routes
 
 n8n 워크플로우에서 직접 호출할 수 있는 전용 엔드포인트
+
+Performance optimizations:
+- Redis-based task storage (replaces in-memory dict)
+- TTL for automatic cleanup
+- Async operations
 """
 
 from fastapi import APIRouter, HTTPException, BackgroundTasks
@@ -12,13 +17,65 @@ import uuid
 from datetime import datetime
 from enum import Enum
 
+from src.infrastructure.storage.async_redis_cache import get_async_cache
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/n8n", tags=["n8n Automation"])
 
-# In-memory task storage (메모리 기반 작업 저장소)
-# 프로덕션에서는 Redis나 DB를 사용하세요
-TASK_STORE: Dict[str, Dict[str, Any]] = {}
+# Redis-based task storage with TTL (24 hours)
+TASK_STORE_TTL = 86400  # 24 hours
+
+
+class RedisTaskStore:
+    """Redis-based task storage for n8n tasks."""
+
+    def __init__(self, prefix: str = "n8n:tasks"):
+        self.prefix = prefix
+        self._cache = None
+
+    async def _get_cache(self):
+        if self._cache is None:
+            self._cache = get_async_cache(prefix=self.prefix)
+        return self._cache
+
+    async def get(self, task_id: str) -> Optional[Dict[str, Any]]:
+        """Get task data from Redis."""
+        cache = await self._get_cache()
+        return await cache.get(task_id)
+
+    async def set(self, task_id: str, data: Dict[str, Any]) -> bool:
+        """Store task data in Redis with TTL."""
+        cache = await self._get_cache()
+        return await cache.set(task_id, data, ttl=TASK_STORE_TTL)
+
+    async def update(self, task_id: str, updates: Dict[str, Any]) -> bool:
+        """Update existing task data."""
+        cache = await self._get_cache()
+        existing = await cache.get(task_id)
+        if existing:
+            existing.update(updates)
+            return await cache.set(task_id, existing, ttl=TASK_STORE_TTL)
+        return False
+
+    async def delete(self, task_id: str) -> bool:
+        """Delete task from Redis."""
+        cache = await self._get_cache()
+        return await cache.delete(task_id)
+
+    def __contains__(self, task_id: str) -> bool:
+        """Sync check - use exists() for async."""
+        # Note: This is for backwards compatibility, prefer async exists()
+        return False
+
+    async def exists(self, task_id: str) -> bool:
+        """Check if task exists in Redis."""
+        cache = await self._get_cache()
+        return await cache.exists(task_id)
+
+
+# Global Redis task store instance
+TASK_STORE = RedisTaskStore()
 
 
 class TaskStatus(str, Enum):
@@ -108,10 +165,10 @@ async def execute_agent(request: N8NAgentRequest, background_tasks: BackgroundTa
     task_id = str(uuid.uuid4())
     start_time = datetime.now()
 
-    # 작업 상태를 저장소에 추가
-    TASK_STORE[task_id] = {
+    # 작업 상태를 Redis에 저장
+    await TASK_STORE.set(task_id, {
         "task_id": task_id,
-        "status": TaskStatus.RUNNING,
+        "status": TaskStatus.RUNNING.value,
         "agent": request.agent,
         "query": request.query,
         "created_at": start_time.isoformat(),
@@ -119,7 +176,7 @@ async def execute_agent(request: N8NAgentRequest, background_tasks: BackgroundTa
         "progress": 0,
         "result": None,
         "error": None,
-    }
+    })
 
     logger.info(
         f"[n8n] Executing agent: {request.agent}, query: {request.query}, task_id: {task_id}"
@@ -149,16 +206,14 @@ async def execute_agent(request: N8NAgentRequest, background_tasks: BackgroundTa
 
         execution_time = (datetime.now() - start_time).total_seconds()
 
-        # 작업 완료 상태 업데이트
-        TASK_STORE[task_id].update(
-            {
-                "status": TaskStatus.COMPLETED,
-                "result": result,
-                "updated_at": datetime.now().isoformat(),
-                "execution_time": execution_time,
-                "progress": 100,
-            }
-        )
+        # 작업 완료 상태 업데이트 (Redis)
+        await TASK_STORE.update(task_id, {
+            "status": TaskStatus.COMPLETED.value,
+            "result": result,
+            "updated_at": datetime.now().isoformat(),
+            "execution_time": execution_time,
+            "progress": 100,
+        })
 
         # 백그라운드 알림 전송
         if request.notify_slack:
@@ -184,10 +239,12 @@ async def execute_agent(request: N8NAgentRequest, background_tasks: BackgroundTa
     except Exception as e:
         logger.error(f"[n8n] Agent execution failed: {e}", exc_info=True)
 
-        # 작업 실패 상태 업데이트
-        TASK_STORE[task_id].update(
-            {"status": TaskStatus.FAILED, "error": str(e), "updated_at": datetime.now().isoformat()}
-        )
+        # 작업 실패 상태 업데이트 (Redis)
+        await TASK_STORE.update(task_id, {
+            "status": TaskStatus.FAILED.value,
+            "error": str(e),
+            "updated_at": datetime.now().isoformat(),
+        })
 
         return N8NAgentResponse(
             status="error",
@@ -257,8 +314,8 @@ async def get_task_status(task_id: str):
     """
     logger.info(f"[n8n] Status check: task_id={task_id}")
 
-    # 메모리 저장소에서 작업 상태 조회
-    task_data = TASK_STORE.get(task_id)
+    # Redis에서 작업 상태 조회
+    task_data = await TASK_STORE.get(task_id)
 
     if not task_data:
         raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
@@ -300,21 +357,20 @@ async def receive_webhook_result(payload: Dict[str, Any]):
     if not task_id:
         raise HTTPException(status_code=400, detail="task_id is required")
 
-    # 메모리 저장소에 결과 저장
-    if task_id in TASK_STORE:
+    # Redis에 결과 저장
+    existing = await TASK_STORE.get(task_id)
+    if existing:
         # 기존 작업 업데이트
-        TASK_STORE[task_id].update(
-            {
-                "webhook_result": payload.get("result"),
-                "workflow_id": payload.get("workflow_id"),
-                "webhook_received_at": datetime.now().isoformat(),
-                "metadata": payload.get("metadata", {}),
-            }
-        )
+        await TASK_STORE.update(task_id, {
+            "webhook_result": payload.get("result"),
+            "workflow_id": payload.get("workflow_id"),
+            "webhook_received_at": datetime.now().isoformat(),
+            "metadata": payload.get("metadata", {}),
+        })
         logger.info(f"[n8n] Updated task {task_id} with webhook result")
     else:
         # 새 작업으로 저장
-        TASK_STORE[task_id] = {
+        await TASK_STORE.set(task_id, {
             "task_id": task_id,
             "status": payload.get("status", "unknown"),
             "webhook_result": payload.get("result"),
@@ -322,11 +378,11 @@ async def receive_webhook_result(payload: Dict[str, Any]):
             "created_at": datetime.now().isoformat(),
             "webhook_received_at": datetime.now().isoformat(),
             "metadata": payload.get("metadata", {}),
-        }
+        })
         logger.info(f"[n8n] Created new task {task_id} from webhook result")
 
     # 추가 처리 로직 (예: 알림, 데이터 변환 등)
-    _process_webhook_result(task_id, payload)
+    await _process_webhook_result(task_id, payload)
 
     return {
         "status": "received",
@@ -336,9 +392,9 @@ async def receive_webhook_result(payload: Dict[str, Any]):
     }
 
 
-def _process_webhook_result(task_id: str, payload: Dict[str, Any]) -> None:
+async def _process_webhook_result(task_id: str, payload: Dict[str, Any]) -> None:
     """
-    Webhook 결과에 대한 추가 처리
+    Webhook 결과에 대한 추가 처리 (async)
 
     여기서 다음과 같은 작업을 수행할 수 있습니다:
     - 데이터 검증
