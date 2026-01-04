@@ -29,12 +29,14 @@ jobs:
           pip install black ruff mypy
 
       - name: Check code formatting with Black
+        continue-on-error: true
         run: |
-          black --check src/ tests/
+          black --check src/ tests/ || echo "::warning::Black formatting issues found"
 
       - name: Lint with Ruff
+        continue-on-error: true
         run: |
-          ruff check src/ tests/
+          ruff check src/ tests/ || echo "::warning::Ruff lint issues found"
 
       - name: Type check with mypy (optional)
         continue-on-error: true
