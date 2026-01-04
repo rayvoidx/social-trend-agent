@@ -33,6 +33,7 @@ def get_web_search_mcp():
     global _web_search_mcp
     if _web_search_mcp is None:
         from src.mcp import WebSearchMCP
+
         _web_search_mcp = WebSearchMCP()
     return _web_search_mcp
 
@@ -42,6 +43,7 @@ def get_http_mcp():
     global _http_mcp
     if _http_mcp is None:
         from src.mcp import HttpMCP
+
         _http_mcp = HttpMCP()
     return _http_mcp
 
@@ -51,8 +53,10 @@ def get_youtube_mcp():
     global _youtube_mcp
     if _youtube_mcp is None:
         from src.mcp import YouTubeMCP
+
         _youtube_mcp = YouTubeMCP()
     return _youtube_mcp
+
 
 router = APIRouter(prefix="/api/mcp", tags=["MCP Tools"])
 
@@ -182,9 +186,7 @@ async def list_insights(source: Optional[str] = None, limit: int = 10):
     try:
         # Check cache first
         cache = get_async_cache(prefix="mcp")
-        cache_key = cache_key_from_request(
-            "/insights", {"source": source, "limit": limit}
-        )
+        cache_key = cache_key_from_request("/insights", {"source": source, "limit": limit})
         cached = await cache.get(cache_key)
         if cached is not None:
             return cached

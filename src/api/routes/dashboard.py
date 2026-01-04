@@ -40,6 +40,7 @@ from src.domain.models import save_insight_from_result
 from src.domain.mission import generate_missions_from_insight, recommend_creators_for_mission
 from src.api.routes.n8n import router as n8n_router
 from src.api.routes.mcp_routes import router as mcp_router
+from src.api.routes.auth_router import router as auth_router
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +65,6 @@ app.include_router(n8n_router)
 app.include_router(mcp_router)
 
 # Include auth router
-from src.api.routes.auth_router import router as auth_router
 app.include_router(auth_router)
 
 # Global executor (initialized on startup)
