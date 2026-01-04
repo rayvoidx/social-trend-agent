@@ -7,5 +7,10 @@
       "WebFetch",
       "WebSearch"
     ]
+  },
+  "env": {
+    "$comment_env": "Slack Incoming Webhook URL for notifications",
+    "SLACK_WEBHOOK_URL": "https://hooks.slack.com/services/YOUR/WEBHOOK/URL",
+    "GITHUB_TOKEN": "ghp_your_github_personal_access_token"
   }
 }

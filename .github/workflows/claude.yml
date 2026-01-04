@@ -1,0 +1,81 @@
+name: Claude Code Action
+
+on:
+  issue_comment:
+    types: [created]
+  pull_request_review_comment:
+    types: [created]
+  issues:
+    types: [opened, assigned]
+  pull_request_review:
+    types: [submitted]
+
+jobs:
+  claude:
+    # Only run when @claude is mentioned or on specific triggers
+    if: |
+      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
+      (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude')) ||
+      (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@claude')) ||
+      (github.event_name == 'issues' && contains(github.event.issue.body, '@claude'))
+
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run Claude Code Action
+        uses: anthropics/claude-code-action@beta
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+
+          # Optional: Custom system prompt
+          custom_instructions: |
+            You are working on the social-trend-agent project.
+            Stack: FastAPI(8000) + React(5173) + Redis + Prometheus
+            Standards: Pydantic v2, async/await, Docker multi-stage builds
+            Goals: 20% performance improvement, 80%+ test coverage
+
+            When implementing:
+            1. Use Plan Mode for complex changes
+            2. Run tests with pytest --cov=src
+            3. Format with black and ruff
+            4. Follow conventional commits
+
+          # Optional: Allowed tools
+          allowed_tools: |
+            Bash(git:*)
+            Bash(npm:*)
+            Bash(pytest:*)
+            Bash(python:*)
+            Bash(ruff:*)
+            Bash(black:*)
+            Read
+            Write
+            Edit
+            Glob
+            Grep
+
+      - name: Notify Slack on completion
+        if: always() && env.SLACK_WEBHOOK_URL != ''
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          STATUS="${{ job.status }}"
+          if [ "$STATUS" = "success" ]; then
+            EMOJI=":white_check_mark:"
+          else
+            EMOJI=":x:"
+          fi
+
+          curl -s -X POST -H 'Content-type: application/json' \
+            --data "{\"text\": \"${EMOJI} *Claude Code Action* completed with status: ${STATUS}\n> Issue/PR: ${{ github.event.issue.html_url || github.event.pull_request.html_url }}\n> Repository: ${{ github.repository }}\"}" \
+            "$SLACK_WEBHOOK_URL" || true

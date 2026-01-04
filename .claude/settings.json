@@ -36,5 +36,29 @@
   "env": {
     "NODE_ENV": "development",
     "PYTEST_ARGS": "--cov=src --cov-report=term-missing"
+  },
+  "hooks": {
+    "Notification": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/notify_slack.sh"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/format_after_edit.sh"
+          }
+        ]
+      }
+    ]
   }
 }
