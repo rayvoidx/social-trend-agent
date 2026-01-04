@@ -5,7 +5,7 @@ Tests async Redis cache functionality with mocking.
 """
 
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 import pickle
 
 
@@ -135,18 +135,22 @@ class TestAsyncRedisCache:
     async def test_invalidate_pattern(self, cache, mock_redis):
         """Test invalidating keys by pattern."""
 
-        async def mock_scan():
-            """Mock scan iterator."""
-            for key in [b"test:key1", b"test:key2", b"test:key3"]:
+        # Create an async iterator using the proper mock approach
+        mock_keys = [b"test:key1", b"test:key2", b"test:key3"]
+
+        async def mock_scan(match=None):
+            """Mock scan iterator that properly yields keys."""
+            for key in mock_keys:
                 yield key
 
-        mock_redis.scan_iter.return_value = mock_scan()
+        # Mock scan_iter to return the async iterator directly
+        mock_redis.scan_iter = mock_scan
         mock_redis.delete.return_value = 3
 
         deleted = await cache.invalidate_pattern("key*")
 
         assert deleted == 3
-        mock_redis.delete.assert_called_once()
+        mock_redis.delete.assert_called_once_with(*mock_keys)
 
 
 @pytest.mark.asyncio

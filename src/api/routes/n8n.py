@@ -166,17 +166,20 @@ async def execute_agent(request: N8NAgentRequest, background_tasks: BackgroundTa
     start_time = datetime.now()
 
     # 작업 상태를 Redis에 저장
-    await TASK_STORE.set(task_id, {
-        "task_id": task_id,
-        "status": TaskStatus.RUNNING.value,
-        "agent": request.agent,
-        "query": request.query,
-        "created_at": start_time.isoformat(),
-        "updated_at": start_time.isoformat(),
-        "progress": 0,
-        "result": None,
-        "error": None,
-    })
+    await TASK_STORE.set(
+        task_id,
+        {
+            "task_id": task_id,
+            "status": TaskStatus.RUNNING.value,
+            "agent": request.agent,
+            "query": request.query,
+            "created_at": start_time.isoformat(),
+            "updated_at": start_time.isoformat(),
+            "progress": 0,
+            "result": None,
+            "error": None,
+        },
+    )
 
     logger.info(
         f"[n8n] Executing agent: {request.agent}, query: {request.query}, task_id: {task_id}"
@@ -207,13 +210,16 @@ async def execute_agent(request: N8NAgentRequest, background_tasks: BackgroundTa
         execution_time = (datetime.now() - start_time).total_seconds()
 
         # 작업 완료 상태 업데이트 (Redis)
-        await TASK_STORE.update(task_id, {
-            "status": TaskStatus.COMPLETED.value,
-            "result": result,
-            "updated_at": datetime.now().isoformat(),
-            "execution_time": execution_time,
-            "progress": 100,
-        })
+        await TASK_STORE.update(
+            task_id,
+            {
+                "status": TaskStatus.COMPLETED.value,
+                "result": result,
+                "updated_at": datetime.now().isoformat(),
+                "execution_time": execution_time,
+                "progress": 100,
+            },
+        )
 
         # 백그라운드 알림 전송
         if request.notify_slack:
@@ -240,11 +246,14 @@ async def execute_agent(request: N8NAgentRequest, background_tasks: BackgroundTa
         logger.error(f"[n8n] Agent execution failed: {e}", exc_info=True)
 
         # 작업 실패 상태 업데이트 (Redis)
-        await TASK_STORE.update(task_id, {
-            "status": TaskStatus.FAILED.value,
-            "error": str(e),
-            "updated_at": datetime.now().isoformat(),
-        })
+        await TASK_STORE.update(
+            task_id,
+            {
+                "status": TaskStatus.FAILED.value,
+                "error": str(e),
+                "updated_at": datetime.now().isoformat(),
+            },
+        )
 
         return N8NAgentResponse(
             status="error",
@@ -361,24 +370,30 @@ async def receive_webhook_result(payload: Dict[str, Any]):
     existing = await TASK_STORE.get(task_id)
     if existing:
         # 기존 작업 업데이트
-        await TASK_STORE.update(task_id, {
-            "webhook_result": payload.get("result"),
-            "workflow_id": payload.get("workflow_id"),
-            "webhook_received_at": datetime.now().isoformat(),
-            "metadata": payload.get("metadata", {}),
-        })
+        await TASK_STORE.update(
+            task_id,
+            {
+                "webhook_result": payload.get("result"),
+                "workflow_id": payload.get("workflow_id"),
+                "webhook_received_at": datetime.now().isoformat(),
+                "metadata": payload.get("metadata", {}),
+            },
+        )
         logger.info(f"[n8n] Updated task {task_id} with webhook result")
     else:
         # 새 작업으로 저장
-        await TASK_STORE.set(task_id, {
-            "task_id": task_id,
-            "status": payload.get("status", "unknown"),
-            "webhook_result": payload.get("result"),
-            "workflow_id": payload.get("workflow_id"),
-            "created_at": datetime.now().isoformat(),
-            "webhook_received_at": datetime.now().isoformat(),
-            "metadata": payload.get("metadata", {}),
-        })
+        await TASK_STORE.set(
+            task_id,
+            {
+                "task_id": task_id,
+                "status": payload.get("status", "unknown"),
+                "webhook_result": payload.get("result"),
+                "workflow_id": payload.get("workflow_id"),
+                "created_at": datetime.now().isoformat(),
+                "webhook_received_at": datetime.now().isoformat(),
+                "metadata": payload.get("metadata", {}),
+            },
+        )
         logger.info(f"[n8n] Created new task {task_id} from webhook result")
 
     # 추가 처리 로직 (예: 알림, 데이터 변환 등)

@@ -35,10 +35,10 @@ def main() -> None:
         moved += 1
 
     print(f"Migrated {moved} file(s) from src/artifacts -> artifacts/")
-    print("Note: empty directories under src/artifacts may remain; safe to delete manually if desired.")
+    print(
+        "Note: empty directories under src/artifacts may remain; safe to delete manually if desired."
+    )
 
 
 if __name__ == "__main__":
     main()
-
-

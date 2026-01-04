@@ -201,9 +201,7 @@ class AsyncRedisCache:
             logger.error(f"Redis get_json error: {e}")
             return None
 
-    async def set_json(
-        self, key: str, value: Dict[str, Any], ttl: Optional[int] = None
-    ) -> bool:
+    async def set_json(self, key: str, value: Dict[str, Any], ttl: Optional[int] = None) -> bool:
         """Set JSON value in cache."""
         await self._ensure_client()
 
