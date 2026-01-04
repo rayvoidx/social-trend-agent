@@ -21,4 +21,4 @@ allowed-tools: Read, Grep, Glob, Write, Bash
    - Sub-agents
 
 ## Output
-프로젝트 루트에 CLAUDE.md 파일 생성 또는 업데이트
+.claude/CLAUDE.md 파일 생성 또는 업데이트
