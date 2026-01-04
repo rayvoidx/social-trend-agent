@@ -63,6 +63,10 @@ app.add_middleware(
 app.include_router(n8n_router)
 app.include_router(mcp_router)
 
+# Include auth router
+from src.api.routes.auth_router import router as auth_router
+app.include_router(auth_router)
+
 # Global executor (initialized on startup)
 executor: Optional[DistributedAgentExecutor] = None
 
