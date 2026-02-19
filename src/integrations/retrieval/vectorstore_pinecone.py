@@ -142,7 +142,7 @@ class PineconeVectorStore:
         )
 
         matches = []
-        for match in results.matches:
+        for match in results.matches:  # type: ignore[union-attr]
             matches.append(
                 {
                     "id": match.id,
@@ -168,7 +168,7 @@ class PineconeVectorStore:
             self.index.delete(ids=ids, namespace=self.namespace)
             logger.info(f"Deleted {len(ids)} vectors from {self.index_name}")
 
-    def describe_stats(self) -> Dict[str, Any]:
+    def describe_stats(self) -> Any:
         """Get index statistics."""
         return self.index.describe_index_stats()
 

@@ -437,22 +437,11 @@ class JSONFormatter(logging.Formatter):
         }
 
         # Add extra fields
-        if hasattr(record, "run_id"):
-            log_data["run_id"] = record.run_id
-        if hasattr(record, "method"):
-            log_data["method"] = record.method
-        if hasattr(record, "path"):
-            log_data["path"] = record.path
-        if hasattr(record, "status_code"):
-            log_data["status_code"] = record.status_code
-        if hasattr(record, "duration_ms"):
-            log_data["duration_ms"] = record.duration_ms
-        if hasattr(record, "client_ip"):
-            log_data["client_ip"] = record.client_ip
-        if hasattr(record, "error"):
-            log_data["error"] = record.error
-        if hasattr(record, "error_type"):
-            log_data["error_type"] = record.error_type
+        for field in ("run_id", "method", "path", "status_code",
+                      "duration_ms", "client_ip", "error", "error_type"):
+            value = getattr(record, field, None)
+            if value is not None:
+                log_data[field] = value
 
         # Add exception info
         if record.exc_info:

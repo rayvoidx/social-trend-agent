@@ -114,7 +114,9 @@ def backoff_retry(
                     # Wait before retry
                     time.sleep(backoff_time)
             # All retries exhausted
-            raise last_exception
+            if last_exception is not None:
+                raise last_exception
+            raise RuntimeError(f"{func.__name__} failed after {dyn_max_retries} retries")
 
         return wrapper
 

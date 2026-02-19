@@ -132,6 +132,10 @@ class DiskCache:
             cache_file.unlink()
         logger.debug("Disk cache cleared")
 
+    def size(self) -> int:
+        """캐시 내 항목 수 조회"""
+        return len(list(self.cache_dir.glob("*.pkl")))
+
 
 # Global cache instances
 _memory_cache = SimpleCache(default_ttl=3600)  # 1 hour
@@ -183,8 +187,8 @@ def cached(ttl: int = 3600, use_disk: bool = False, key_func: Optional[Callable]
             return result
 
         # Add cache management methods
-        wrapper.cache_clear = cache.clear
-        wrapper.cache_size = cache.size if hasattr(cache, "size") else lambda: 0
+        setattr(wrapper, "cache_clear", cache.clear)
+        setattr(wrapper, "cache_size", cache.size)
 
         return wrapper
 

@@ -207,12 +207,9 @@ class WebSearchMCP:
     """
 
     def __init__(self, timeout: float = 5.0):
-        from config.settings import get_settings
-
         self.timeout = timeout
-        s = get_settings()
-        self.brave_key: str = s.BRAVE_API_KEY
-        self.serpapi_key: str = s.SERPAPI_API_KEY
+        self.brave_key: str = os.getenv("BRAVE_API_KEY", "")
+        self.serpapi_key: str = os.getenv("SERPAPI_API_KEY", "")
 
     def search(self, query: str, top_k: int = 5) -> List[str]:
         try:
@@ -378,7 +375,7 @@ class YouTubeMCP:
         # YouTube Analyzer 초기화 (선택적)
         if enable_analyzer:
             try:
-                from src.mcp.youtube_analyzer import YouTubeAnalyzer
+                from src.youtube_analyzer import YouTubeAnalyzer
 
                 self.analyzer = YouTubeAnalyzer()
                 logger.info("YouTubeMCP: YouTube Analyzer enabled")
@@ -904,12 +901,13 @@ class YouTubeMCP:
             Dict[str, Any]: YouTube 영상 데이터 또는 None
         """
         import asyncio
-        from config.settings import get_settings
 
-        settings = get_settings()
+        youtube_api_key = os.getenv("YOUTUBE_API_KEY", "")
+        youtube_channel_id_env = os.getenv("YOUTUBE_CHANNEL_ID", "")
+        youtube_channel_handle = os.getenv("YOUTUBE_CHANNEL_HANDLE", "")
 
         # YouTube API 키가 없으면 스킵
-        if not settings.YOUTUBE_API_KEY:
+        if not youtube_api_key:
             return None
 
         # YouTube 클라이언트가 초기화되지 않았으면 스킵
@@ -918,8 +916,8 @@ class YouTubeMCP:
             return None
 
         # 채널 ID 또는 핸들 가져오기
-        target_channel_id = channel_id or settings.YOUTUBE_CHANNEL_ID
-        channel_handle = settings.YOUTUBE_CHANNEL_HANDLE
+        target_channel_id = channel_id or youtube_channel_id_env
+        channel_handle = youtube_channel_handle
 
         # 채널 ID가 없고 핸들이 있으면 핸들로 채널 ID 찾기
         if not target_channel_id and channel_handle:
@@ -1062,7 +1060,7 @@ async def load_mcp_tools(servers: Dict[str, Dict[str, Any]]) -> List[Any]:
         logger.info("MCP adapters not available. Skipping tool load.")
         return []
     try:
-        client = MultiServerMCPClient(servers)
+        client = MultiServerMCPClient(servers)  # type: ignore[arg-type]
         tools = await client.get_tools()
         return tools
     except Exception as e:
@@ -1070,7 +1068,7 @@ async def load_mcp_tools(servers: Dict[str, Dict[str, Any]]) -> List[Any]:
         return []
 
 
-async def build_mcp_toolnode(servers: Dict[str, Dict[str, Any]]) -> ToolNode | None:
+async def build_mcp_toolnode(servers: Dict[str, Dict[str, Any]]) -> Optional[Any]:
     """서버 정의에서 도구를 로드해 ToolNode를 생성. 실패 시 None 반환."""
     if not MCP_LIB_AVAILABLE:
         return None
@@ -1078,7 +1076,7 @@ async def build_mcp_toolnode(servers: Dict[str, Dict[str, Any]]) -> ToolNode | N
     if not tools:
         return None
     try:
-        return ToolNode(tools)
+        return ToolNode(tools)  # type: ignore[call-arg]
     except Exception as e:
         logger.warning("Failed to create MCP ToolNode: %s", e)
         return None

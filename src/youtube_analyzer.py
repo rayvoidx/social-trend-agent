@@ -63,7 +63,7 @@ class YouTubeAnalyzer:
         output_dir = output_dir or self.temp_dir
         output_dir.mkdir(parents=True, exist_ok=True)
 
-        subtitle_files: Dict[str, str] = {}
+        subtitle_files: Dict[str, Any] = {}
 
         for lang in languages:
             try:

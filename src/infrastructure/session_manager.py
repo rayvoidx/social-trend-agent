@@ -155,7 +155,9 @@ class SessionManager:
             세션 객체
         """
         if session_id and session_id in self.sessions:
-            return self.get_session(session_id)
+            session = self.get_session(session_id)
+            if session is not None:
+                return session
 
         return self.create_session(session_id=session_id, mode=mode, **kwargs)
 

@@ -15,7 +15,7 @@ import json
 import logging
 import os
 import pickle
-from typing import Any, Dict, Optional
+from typing import Any, Callable, Dict, Optional
 from functools import wraps
 
 logger = logging.getLogger(__name__)
@@ -314,7 +314,7 @@ def cache_key_from_request(
 
 def cached_endpoint(
     ttl: int = 300,
-    key_func: Optional[callable] = None,
+    key_func: Optional[Callable] = None,
     prefix: str = "endpoint",
 ):
     """

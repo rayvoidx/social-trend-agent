@@ -6,6 +6,7 @@ Canonical module (moved from `src/core/plan_graph.py`).
 
 from __future__ import annotations
 
+from collections.abc import Hashable
 from typing import Any, Callable, Dict, List, Optional, Type
 import time
 
@@ -240,7 +241,7 @@ def build_plan_runner_graph(
     graph.set_entry_point("router")
     graph.add_edge("router", "dispatch")
 
-    path_map: Dict[str, Any] = {k: v for k, v in op_key_to_node_name.items()}
+    path_map: dict[Hashable, str] = {k: v for k, v in op_key_to_node_name.items()}
     path_map["__unknown__"] = "op_unknown"
     path_map["__end__"] = END
     graph.add_conditional_edges("dispatch", _route_to_op, path_map)
