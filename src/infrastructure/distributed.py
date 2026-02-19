@@ -151,7 +151,7 @@ class AgentWorker:
         self,
         worker_id: str,
         task_queue: InMemoryTaskQueue,
-        agent_executor: Callable[[str, str, Dict[str, Any]], Awaitable[Dict[str, Any]]],
+        agent_executor: Callable[..., Awaitable[Dict[str, Any]]],
     ):
         """
         워커 초기화
@@ -160,7 +160,7 @@ class AgentWorker:
             worker_id: 고유한 워커 식별자
             task_queue: 태스크를 가져올 큐
             agent_executor: 에이전트 태스크를 실행할 비동기 함수
-                           시그니처: async def(agent_name, query, params) -> result
+                           시그니처: async def(agent_name, query, params, task_id) -> result
         """
         self.worker_id = worker_id
         self.task_queue = task_queue
@@ -207,8 +207,8 @@ class AgentWorker:
 
             logger.info(f"Worker {self.worker_id} executing task {task.task_id}")
 
-            # 에이전트 실행
-            result = await self.agent_executor(task.agent_name, task.query, task.params)
+            # 에이전트 실행 (task_id 전달하여 스트리밍 지원)
+            result = await self.agent_executor(task.agent_name, task.query, task.params, task.task_id)
 
             # 성공 상태 업데이트
             await self.task_queue.update_task(
@@ -291,7 +291,7 @@ class DistributedAgentExecutor:
         self.worker_tasks: List[asyncio.Task] = []
 
     async def _default_executor(
-        self, agent_name: str, query: str, params: Dict[str, Any]
+        self, agent_name: str, query: str, params: Dict[str, Any], task_id: Optional[str] = None
     ) -> Dict[str, Any]:
         """기본 에이전트 실행 함수"""
         from src.agents.news_trend.graph import run_agent

@@ -19,9 +19,11 @@
 from fastapi import FastAPI, WebSocket, HTTPException, BackgroundTasks, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
+from starlette.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from typing import Dict, Any, List, Optional, Tuple
 import asyncio
+import json
 from datetime import datetime
 import logging
 
@@ -153,8 +155,13 @@ async def startup_event():
     logger.info("Starting distributed executor...")
 
     # 에이전트 실행 함수 정의
-    async def execute_agent(agent_name: str, query: str, params: Dict[str, Any]) -> Dict[str, Any]:
-        """에이전트 실행 및 결과 반환"""
+    async def execute_agent(
+        agent_name: str, query: str, params: Dict[str, Any], task_id: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """에이전트 실행 및 결과 반환 (task_id가 있으면 스트리밍 이벤트 발행)"""
+        from src.api.streaming import stream_manager, StreamEvent
+        from src.agents.stream_utils import run_agent_with_streaming
+
         # API/웹 환경에서는 stdin 기반 승인(HITL) 입력이 불가능하므로 기본적으로 비활성화
         params = dict(params or {})
         params.setdefault("require_approval", False)
@@ -165,21 +172,25 @@ async def startup_event():
             if agent == "news_trend_agent":
                 from src.agents.news_trend.graph import run_agent as run_news_agent
 
-                source = InsightSource.NEWS_TREND
-                state = run_news_agent(query=q, **p)
-                return source, state.model_dump()
+                # 스트리밍 모드: task_id가 있으면 graph.stream() 사용
+                if task_id:
+                    result_state = await run_agent_with_streaming(
+                        task_id=task_id,
+                        agent_name=agent,
+                        run_fn=run_news_agent,
+                        query=q,
+                        params=p,
+                    )
+                    return InsightSource.NEWS_TREND, result_state.model_dump()
+                return InsightSource.NEWS_TREND, run_news_agent(query=q, **p).model_dump()
             if agent == "viral_video_agent":
                 from src.agents.viral_video.graph import run_agent as run_viral_agent
 
-                source = InsightSource.VIRAL_VIDEO
-                state = run_viral_agent(query=q, **p)
-                return source, state.model_dump()
+                return InsightSource.VIRAL_VIDEO, run_viral_agent(query=q, **p).model_dump()
             if agent == "social_trend_agent":
                 from src.agents.social_trend.graph import run_agent as run_social_agent
 
-                source = InsightSource.SOCIAL_TREND
-                state = run_social_agent(query=q, **p)
-                return source, state.model_dump()
+                return InsightSource.SOCIAL_TREND, run_social_agent(query=q, **p).model_dump()
             raise ValueError(f"Unknown agent: {agent}")
 
         # 2025: Orchestrator 3-gear mode (router -> planner -> workers)
@@ -201,7 +212,7 @@ async def startup_event():
             # Strong binding: pass orchestrator output into agent state
             params.setdefault("orchestrator", orch)
 
-            sub_results = []
+            sub_results: List[Dict[str, Any]] = []
             primary_agent = str(
                 plan.get("primary_agent") or agents[0].get("agent_name") or "news_trend_agent"
             )
@@ -227,8 +238,8 @@ async def startup_event():
 
             # Fallback if primary wasn't executed
             if primary_result is None and sub_results:
-                primary_agent = sub_results[0]["agent_name"]
-                primary_result = sub_results[0]["result"]
+                primary_agent = str(sub_results[0].get("agent_name") or "news_trend_agent")
+                primary_result = dict(sub_results[0].get("result") or {})
                 # best effort source mapping
                 primary_source = {
                     "news_trend_agent": InsightSource.NEWS_TREND,
@@ -307,6 +318,13 @@ async def startup_event():
             result_dict["insight_id"] = insight.id
         except Exception:  # 인사이트 저장 실패가 전체 실행을 막지 않도록
             logger.error("Failed to save insight from agent result", exc_info=True)
+
+        # 스트리밍 완료 이벤트 발행
+        if task_id:
+            await stream_manager.emit(task_id, StreamEvent(
+                event="complete",
+                data={"task_id": task_id, "status": "completed"},
+            ))
 
         return result_dict
 
@@ -559,6 +577,35 @@ async def get_task(task_id: str):
         duration=duration,
         result=task.result,
         error=task.error,
+    )
+
+
+@app.get("/api/tasks/{task_id}/stream")
+async def stream_task(task_id: str):
+    """
+    태스크 실시간 스트리밍 (SSE)
+
+    태스크 실행 중 노드별 진행 이벤트를 Server-Sent Events로 전달합니다.
+    이미 완료된 태스크는 히스토리를 리플레이합니다.
+    """
+    from src.api.streaming import stream_manager
+
+    async def event_generator():
+        async for event in stream_manager.subscribe(task_id):
+            if event.event == "keepalive":
+                yield ": keepalive\n\n"
+            else:
+                data = json.dumps(event.to_dict(), ensure_ascii=False)
+                yield f"event: {event.event}\ndata: {data}\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
     )
 
 

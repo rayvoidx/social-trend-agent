@@ -1,5 +1,5 @@
 export interface AnalysisRequest {
-  agent_type: 'news_trend_agent' | 'viral_video_agent' | 'social_trend_agent';
+  agent_type: "news_trend_agent" | "viral_video_agent" | "social_trend_agent";
   query: string;
   time_window?: string;
   language?: string;
@@ -45,7 +45,7 @@ export interface TaskStatus {
   task_id: string;
   agent_name: string;
   query: string;
-  status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
+  status: "pending" | "running" | "completed" | "failed" | "cancelled";
   created_at: number;
   started_at?: number;
   completed_at?: number;
@@ -81,4 +81,33 @@ export interface MissionRecommendationResponse {
   insight_id: string;
   count: number;
   recommendations: MissionRecommendation[];
+}
+
+// SSE Streaming Types
+export interface StreamEventData {
+  event: "started" | "node_complete" | "complete" | "error" | "keepalive";
+  data: {
+    node?: string;
+    label?: string;
+    index?: number;
+    total?: number;
+    progress?: number;
+    preview?: Record<string, unknown>;
+    task_id?: string;
+    status?: string;
+    error?: string;
+    agent_name?: string;
+    query?: string;
+  };
+  timestamp: number;
+}
+
+export interface TaskStreamState {
+  events: StreamEventData[];
+  currentNode: string | null;
+  currentLabel: string | null;
+  progress: number;
+  isStreaming: boolean;
+  completedNodes: string[];
+  error: string | null;
 }

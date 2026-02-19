@@ -1,15 +1,17 @@
-import { useState } from 'react';
-import { AnalysisForm } from './AnalysisForm';
-import { ResultCard } from './ResultCard';
-import { McpToolsPanel } from './McpToolsPanel';
-import type { AnalysisRequest, TaskStatus } from '../types';
-import api from '../api/client';
-import { RefreshCw } from 'lucide-react';
+import { useState } from "react";
+import { AnalysisForm } from "./AnalysisForm";
+import { ResultCard } from "./ResultCard";
+import { McpToolsPanel } from "./McpToolsPanel";
+import type { AnalysisRequest, TaskStatus } from "../types";
+import api from "../api/client";
+import { useTaskStream } from "../hooks/useTaskStream";
+import { RefreshCw } from "lucide-react";
 
 export function Dashboard() {
   const [tasks, setTasks] = useState<TaskStatus[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { streams, startStream } = useTaskStream();
 
   const handleSubmit = async (request: AnalysisRequest) => {
     setIsLoading(true);
@@ -24,16 +26,21 @@ export function Dashboard() {
         task_id,
         agent_name: request.agent_type,
         query: request.query,
-        status: 'pending',
+        status: "pending",
         created_at: Date.now() / 1000,
       };
 
-      setTasks(prev => [newTask, ...prev]);
+      setTasks((prev) => [newTask, ...prev]);
 
-      // Poll for status
+      // Start SSE stream for real-time progress
+      startStream(task_id);
+
+      // Poll for final status (fallback, slower interval since SSE handles real-time)
       pollTaskStatus(task_id);
     } catch (err) {
-      setError(err instanceof Error ? err.message : '분석 요청에 실패했습니다.');
+      setError(
+        err instanceof Error ? err.message : "분석 요청에 실패했습니다.",
+      );
     } finally {
       setIsLoading(false);
     }
@@ -47,18 +54,18 @@ export function Dashboard() {
       try {
         const status = await api.getTaskStatus(taskId);
 
-        setTasks(prev => prev.map(t =>
-          t.task_id === taskId ? status : t
-        ));
+        setTasks((prev) =>
+          prev.map((t) => (t.task_id === taskId ? status : t)),
+        );
 
-        if (status.status === 'pending' || status.status === 'running') {
+        if (status.status === "pending" || status.status === "running") {
           if (attempts < maxAttempts) {
             attempts++;
-            setTimeout(poll, 2000);
+            setTimeout(poll, 5000); // 5초 간격 (SSE가 실시간 담당)
           }
         }
       } catch (err) {
-        console.error('Failed to poll task status:', err);
+        console.error("Failed to poll task status:", err);
       }
     };
 
@@ -110,7 +117,11 @@ export function Dashboard() {
           ) : (
             <div className="space-y-4">
               {tasks.map((task) => (
-                <ResultCard key={task.task_id} task={task} />
+                <ResultCard
+                  key={task.task_id}
+                  task={task}
+                  streamState={streams[task.task_id]}
+                />
               ))}
             </div>
           )}

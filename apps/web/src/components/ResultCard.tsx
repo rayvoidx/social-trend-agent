@@ -1,18 +1,45 @@
-import { CheckCircle, Clock, AlertCircle, Loader2 } from 'lucide-react';
-import type { TaskStatus } from '../types';
-import { MissionRecommendations } from './MissionRecommendations';
+import { CheckCircle, Clock, AlertCircle, Loader2 } from "lucide-react";
+import type { TaskStatus, TaskStreamState } from "../types";
+import { MissionRecommendations } from "./MissionRecommendations";
+import { TaskProgress } from "./TaskProgress";
 
 interface ResultCardProps {
   task: TaskStatus;
+  streamState?: TaskStreamState;
 }
 
-export function ResultCard({ task }: ResultCardProps) {
+export function ResultCard({ task, streamState }: ResultCardProps) {
   const statusConfig = {
-    pending: { icon: Clock, color: 'text-yellow-500', bg: 'bg-yellow-50', label: '대기 중' },
-    running: { icon: Loader2, color: 'text-blue-500', bg: 'bg-blue-50', label: '분석 중' },
-    completed: { icon: CheckCircle, color: 'text-green-500', bg: 'bg-green-50', label: '완료' },
-    failed: { icon: AlertCircle, color: 'text-red-500', bg: 'bg-red-50', label: '실패' },
-    cancelled: { icon: AlertCircle, color: 'text-gray-500', bg: 'bg-gray-50', label: '취소됨' },
+    pending: {
+      icon: Clock,
+      color: "text-yellow-500",
+      bg: "bg-yellow-50",
+      label: "대기 중",
+    },
+    running: {
+      icon: Loader2,
+      color: "text-blue-500",
+      bg: "bg-blue-50",
+      label: "분석 중",
+    },
+    completed: {
+      icon: CheckCircle,
+      color: "text-green-500",
+      bg: "bg-green-50",
+      label: "완료",
+    },
+    failed: {
+      icon: AlertCircle,
+      color: "text-red-500",
+      bg: "bg-red-50",
+      label: "실패",
+    },
+    cancelled: {
+      icon: AlertCircle,
+      color: "text-gray-500",
+      bg: "bg-gray-50",
+      label: "취소됨",
+    },
   };
 
   const config = statusConfig[task.status] || statusConfig.failed;
@@ -22,8 +49,12 @@ export function ResultCard({ task }: ResultCardProps) {
     <div className="bg-white rounded-lg shadow-sm border p-4">
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center space-x-2">
-          <StatusIcon className={`h-5 w-5 ${config.color} ${task.status === 'running' ? 'animate-spin' : ''}`} />
-          <span className={`text-sm font-medium px-2 py-1 rounded ${config.bg} ${config.color}`}>
+          <StatusIcon
+            className={`h-5 w-5 ${config.color} ${task.status === "running" ? "animate-spin" : ""}`}
+          />
+          <span
+            className={`text-sm font-medium px-2 py-1 rounded ${config.bg} ${config.color}`}
+          >
             {config.label}
           </span>
         </div>
@@ -43,10 +74,19 @@ export function ResultCard({ task }: ResultCardProps) {
           <span className="text-sm text-gray-900">{task.agent_name}</span>
         </div>
 
+        {/* Streaming progress */}
+        {streamState && streamState.isStreaming && (
+          <TaskProgress streamState={streamState} />
+        )}
+
         {task.duration && (
           <div>
-            <span className="text-sm font-medium text-gray-700">실행 시간: </span>
-            <span className="text-sm text-gray-900">{task.duration.toFixed(2)}초</span>
+            <span className="text-sm font-medium text-gray-700">
+              실행 시간:{" "}
+            </span>
+            <span className="text-sm text-gray-900">
+              {task.duration.toFixed(2)}초
+            </span>
           </div>
         )}
 
@@ -54,7 +94,9 @@ export function ResultCard({ task }: ResultCardProps) {
           <>
             {task.result.sentiment && (
               <div>
-                <span className="text-sm font-medium text-gray-700 block mb-2">감성 분석</span>
+                <span className="text-sm font-medium text-gray-700 block mb-2">
+                  감성 분석
+                </span>
                 <div className="flex space-x-4">
                   <div className="text-center">
                     <div className="text-lg font-bold text-green-600">
@@ -80,7 +122,9 @@ export function ResultCard({ task }: ResultCardProps) {
 
             {task.result.keywords && task.result.keywords.length > 0 && (
               <div>
-                <span className="text-sm font-medium text-gray-700 block mb-2">주요 키워드</span>
+                <span className="text-sm font-medium text-gray-700 block mb-2">
+                  주요 키워드
+                </span>
                 <div className="flex flex-wrap gap-2">
                   {task.result.keywords.slice(0, 5).map((kw, i) => (
                     <span
@@ -96,22 +140,32 @@ export function ResultCard({ task }: ResultCardProps) {
 
             {task.result.summary && (
               <div>
-                <span className="text-sm font-medium text-gray-700 block mb-1">요약</span>
-                <p className="text-sm text-gray-600 line-clamp-3">{task.result.summary}</p>
+                <span className="text-sm font-medium text-gray-700 block mb-1">
+                  요약
+                </span>
+                <p className="text-sm text-gray-600 line-clamp-3">
+                  {task.result.summary}
+                </p>
               </div>
             )}
 
             {task.result.report_md && (
               <div>
-                <span className="text-sm font-medium text-gray-700 block mb-1">리포트</span>
+                <span className="text-sm font-medium text-gray-700 block mb-1">
+                  리포트
+                </span>
                 <p className="text-sm text-gray-600">{task.result.report_md}</p>
               </div>
             )}
 
             {task.result.insight_id && (
               <div>
-                <span className="text-sm font-medium text-gray-700">인사이트 ID: </span>
-                <span className="text-sm text-gray-500">{task.result.insight_id}</span>
+                <span className="text-sm font-medium text-gray-700">
+                  인사이트 ID:{" "}
+                </span>
+                <span className="text-sm text-gray-500">
+                  {task.result.insight_id}
+                </span>
               </div>
             )}
 
