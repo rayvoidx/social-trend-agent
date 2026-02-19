@@ -726,8 +726,12 @@ def summarize_trend(
                     "title": it.get("title", ""),
                     "url": it.get("url", ""),
                     "description": it.get("description", ""),
-                    "publishedAt": it.get("publishedAt", ""),
-                    "source": (it.get("source") or {}).get("name", ""),
+                    "publishedAt": it.get("published_at", "") or it.get("publishedAt", ""),
+                    "source": (
+                        it.get("source", {}).get("name", "")
+                        if isinstance(it.get("source"), dict)
+                        else str(it.get("source", ""))
+                    ),
                 }
             )
 
@@ -751,81 +755,83 @@ def summarize_trend(
                     {"role": "user", "content": synth_prompt},
                 ],
                 temperature=0.3,
-                max_tokens=900,
+                max_tokens=4000,
                 model=synthesizer_model,
             )
             return str(brief).strip()
 
         # Compound (2025): planner(JSON) -> synthesizer(cheap) -> writer(refine)
-        plan_prompt = (
-            "You are a planner for a trend-analysis agent. "
-            "Return ONLY JSON that matches the schema.\n\n"
-            f"Query: {query}\n"
-            f"Language: ko\n"
-            f"Signals:\n"
-            f"- Sentiment: {sentiment}\n"
-            f"- Top keywords: {[kw.get('keyword') for kw in keywords[:10]]}\n"
-            f"- Headlines (top): {top_headlines}\n"
-        )
+        # Falls back to cheap path if compound pipeline fails (e.g., model access issues)
+        try:
+            plan_prompt = (
+                "You are a planner for a trend-analysis agent. "
+                "Return ONLY JSON that matches the schema.\n\n"
+                f"Query: {query}\n"
+                f"Language: ko\n"
+                f"Signals:\n"
+                f"- Sentiment: {sentiment}\n"
+                f"- Top keywords: {[kw.get('keyword') for kw in keywords[:10]]}\n"
+                f"- Headlines (top): {top_headlines}\n"
+            )
 
-        plan_dict = client.chat_json(
-            messages=[
-                {
-                    "role": "system",
-                    "content": "You are a strict planning engine. Output JSON only.",
-                },
-                {"role": "user", "content": plan_prompt},
-            ],
-            schema=AgentPlan.model_json_schema(),
-            temperature=0.2,
-            model=planner_model,
-            max_tokens=700,
-        )
-        plan = AgentPlan.model_validate(plan_dict)
+            plan_dict = client.chat_json(
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are a strict planning engine. Output JSON only.",
+                    },
+                    {"role": "user", "content": plan_prompt},
+                ],
+                schema=AgentPlan.model_json_schema(),
+                temperature=0.2,
+                model=planner_model,
+                max_tokens=2000,
+            )
+            plan = AgentPlan.model_validate(plan_dict)
 
-        synth_prompt = (
-            "Summarize the following news snippets into a compact Korean brief.\n"
-            "Requirements:\n"
-            "- 6~10 bullets max\n"
-            "- Each bullet must reference at least one title and include URL in parentheses\n"
-            "- No speculation; if uncertain, say '불확실'\n\n"
-            f"Query: {query}\n\n"
-            f"Snippets (JSON): {json.dumps(raw_snippets, ensure_ascii=False)}\n"
-        )
+            synth_prompt = (
+                "Summarize the following news snippets into a compact Korean brief.\n"
+                "Requirements:\n"
+                "- 6~10 bullets max\n"
+                "- Each bullet must reference at least one title and include URL in parentheses\n"
+                "- No speculation; if uncertain, say '불확실'\n\n"
+                f"Query: {query}\n\n"
+                f"Snippets (JSON): {json.dumps(raw_snippets, ensure_ascii=False)}\n"
+            )
 
-        synthesized_context = client.chat(
-            messages=[
-                {
-                    "role": "system",
-                    "content": "You are a context synthesizer. Be concise and factual.",
-                },
-                {"role": "user", "content": synth_prompt},
-            ],
-            temperature=0.3,
-            max_tokens=900,
-            model=synthesizer_model,
-        )
+            synthesized_context = client.chat(
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are a context synthesizer. Be concise and factual.",
+                    },
+                    {"role": "user", "content": synth_prompt},
+                ],
+                temperature=0.3,
+                max_tokens=4000,
+                model=synthesizer_model,
+            )
 
-        engine = RefineEngine(client)
-        compound_prompt = (
-            prompt
-            + "\n\n---\n"
-            + "## Planner Output (JSON)\n"
-            + plan.model_dump_json(indent=2)
-            + "\n\n---\n"
-            + "## Synthesized Context (grounded)\n"
-            + str(synthesized_context)
-        )
+            engine = RefineEngine(client)
+            compound_prompt = (
+                prompt
+                + "\n\n---\n"
+                + "## Planner Output (JSON)\n"
+                + plan.model_dump_json(indent=2)
+                + "\n\n---\n"
+                + "## Synthesized Context (grounded)\n"
+                + str(synthesized_context)
+            )
 
-        insight: TrendInsight = engine.refine_loop(
-            prompt=compound_prompt,
-            initial_schema=TrendInsight,
-            criteria="명확하고 구체적인 인사이트 제공, 실행 가능한 권고안 포함, 중복 없는 핵심 요약",
-            max_iterations=1,  # 속도를 위해 1회 리파인만 시도
-            model=writer_model,
-        )
+            insight: TrendInsight = engine.refine_loop(
+                prompt=compound_prompt,
+                initial_schema=TrendInsight,
+                criteria="명확하고 구체적인 인사이트 제공, 실행 가능한 권고안 포함, 중복 없는 핵심 요약",
+                max_iterations=1,  # 속도를 위해 1회 리파인만 시도
+                model=writer_model,
+            )
 
-        markdown = f"""
+            markdown = f"""
 ### 트렌드 요약
 {insight.summary}
 
@@ -841,8 +847,35 @@ def summarize_trend(
 ---
 *영향력 점수: {insight.impact_score}/10*
 """
-        logger.info(f"Trend summarization completed with impact score: {insight.impact_score}")
-        return markdown.strip()
+            logger.info(f"Trend summarization completed with impact score: {insight.impact_score}")
+            return markdown.strip()
+
+        except Exception as compound_err:
+            logger.warning(f"Compound summarization failed, using cheap path: {compound_err}")
+
+        # Cheap fallback: single synthesizer call (no planner/refine)
+        synth_prompt = (
+            "Create a compact Korean trend brief based ONLY on the provided snippets.\n"
+            "Requirements:\n"
+            "- Title + 6~10 bullets\n"
+            "- Each bullet must include one URL in parentheses\n"
+            "- No speculation; if uncertain, say '불확실'\n\n"
+            f"Query: {query}\n\n"
+            f"Snippets (JSON): {json.dumps(raw_snippets, ensure_ascii=False)}\n"
+        )
+        brief = client.chat(
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are a concise trend summarizer. Be factual and grounded.",
+                },
+                {"role": "user", "content": synth_prompt},
+            ],
+            temperature=0.3,
+            max_tokens=4000,
+            model=synthesizer_model,
+        )
+        return str(brief).strip()
 
     except Exception as e:
         logger.error(f"Error in LLM summarization, falling back to simple summary: {str(e)}")

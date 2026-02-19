@@ -202,17 +202,20 @@ class LLMClient:
         # Allow overriding parameters (e.g., model) via kwargs
         effective_model = kwargs.get("model", self._model)
 
+        # o-series and GPT-5 family only support temperature=1 (default).
+        # Omit temperature for these models to avoid 400 errors.
+        _is_new_model = isinstance(effective_model, str) and effective_model.startswith(("o", "gpt-5"))
+
         params: Dict[str, Any] = {
             "model": effective_model,
             "messages": messages,
-            "temperature": temperature,
         }
 
+        if not _is_new_model:
+            params["temperature"] = temperature
+
         # Some newer OpenAI models require `max_completion_tokens` instead of `max_tokens`.
-        # We'll choose the right parameter based on model name.
-        # - o-series: o1/o3/o4...
-        # - GPT-5 family: gpt-5.*
-        if isinstance(effective_model, str) and effective_model.startswith(("o", "gpt-5")):
+        if _is_new_model:
             params["max_completion_tokens"] = max_tokens
         else:
             params["max_tokens"] = max_tokens
@@ -225,7 +228,18 @@ class LLMClient:
 
         try:
             response = client.chat.completions.create(**params)
-            return response.choices[0].message.content
+            msg = response.choices[0].message
+            content = msg.content
+            if not content:
+                refusal = getattr(msg, "refusal", None)
+                finish = response.choices[0].finish_reason
+                logger.warning(
+                    f"LLM returned empty content for model={params.get('model')}, "
+                    f"response_format={'response_format' in params}, "
+                    f"finish_reason={finish}, refusal={refusal}"
+                )
+                raise ValueError(f"LLM returned empty content (finish_reason={finish})")
+            return content
         except Exception as e:
             msg = str(e)
 
@@ -234,21 +248,50 @@ class LLMClient:
                 params.pop("max_tokens", None)
                 params["max_completion_tokens"] = max_tokens
                 response = client.chat.completions.create(**params)
-                return response.choices[0].message.content
+                return response.choices[0].message.content or ""
 
-            # If the project doesn't have access to the requested model, fall back to default.
-            if (
-                "does not have access to model" in msg or "model_not_found" in msg
-            ) and effective_model != self._model:
-                logger.warning(
-                    f"Model access error for '{effective_model}'. Falling back to default model '{self._model}'."
-                )
-                params["model"] = self._model
-                # Ensure token param matches fallback model
-                params.pop("max_completion_tokens", None)
-                params["max_tokens"] = max_tokens
-                response = client.chat.completions.create(**params)
-                return response.choices[0].message.content
+            # If the project doesn't have access to the requested model, fall back.
+            if "does not have access to model" in msg or "model_not_found" in msg:
+                # Try default model first (if different from what we already tried)
+                fallback_chain = []
+                if effective_model != self._model:
+                    fallback_chain.append(self._model)
+                # Last resort: widely-available models (newest → oldest)
+                for _lr in ("gpt-4o", "gpt-4o-mini", "gpt-5-mini"):
+                    if _lr not in fallback_chain and _lr != effective_model:
+                        fallback_chain.append(_lr)
+
+                for fb_model in fallback_chain:
+                    logger.warning(
+                        f"Model access error for '{params['model']}'. Trying fallback '{fb_model}'."
+                    )
+                    params["model"] = fb_model
+                    _fb_new = isinstance(fb_model, str) and fb_model.startswith(("o", "gpt-5"))
+                    params.pop("max_completion_tokens", None)
+                    params.pop("max_tokens", None)
+                    params.pop("temperature", None)
+                    if _fb_new:
+                        params["max_completion_tokens"] = max_tokens
+                    else:
+                        params["max_tokens"] = max_tokens
+                        params["temperature"] = temperature
+                    try:
+                        response = client.chat.completions.create(**params)
+                        fb_content = response.choices[0].message.content
+                        if fb_content:
+                            return fb_content
+                        # Empty content — retry without response_format (prompt already asks for JSON)
+                        if "response_format" in params:
+                            params.pop("response_format")
+                            response = client.chat.completions.create(**params)
+                            fb_content = response.choices[0].message.content
+                            if fb_content:
+                                return fb_content
+                        return ""
+                    except Exception as fb_err:
+                        if "does not have access" in str(fb_err) or "model_not_found" in str(fb_err):
+                            continue
+                        raise
 
             raise
 
@@ -358,7 +401,7 @@ class LLMClient:
 
         except json.JSONDecodeError as e:
             logger.error(f"Failed to parse JSON response: {e}")
-            logger.debug(f"Response was: {response}")
+            logger.error(f"Raw response ({len(response)} chars): {response[:500]!r}")
             raise ValueError(f"Invalid JSON response: {e}")
 
     def get_embedding(self, text: str) -> List[float]:

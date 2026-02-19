@@ -121,14 +121,14 @@ class N8NAgentResponse(BaseModel):
     query: str = Field(..., description="분석 쿼리")
 
     # 결과 데이터
-    result: Optional[Dict[str, Any]] = Field(None, description="분석 결과")
+    result: Optional[Dict[str, Any]] = Field(default=None, description="분석 결과")
 
     # 메타데이터
-    execution_time: Optional[float] = Field(None, description="실행 시간 (초)")
+    execution_time: Optional[float] = Field(default=None, description="실행 시간 (초)")
     timestamp: str = Field(..., description="실행 시각")
 
     # 에러 정보
-    error: Optional[str] = Field(None, description="에러 메시지")
+    error: Optional[str] = Field(default=None, description="에러 메시지")
 
 
 class N8NBatchRequest(BaseModel):
@@ -187,23 +187,36 @@ async def execute_agent(request: N8NAgentRequest, background_tasks: BackgroundTa
 
     try:
         # 에이전트 실행
+        result_dict: Dict[str, Any]
         if request.agent == "news_trend_agent":
-            from src.agents.news_trend.graph import run_agent
+            from src.agents.news_trend.graph import run_agent as _run_news
 
-            result = run_agent(
+            news_state = _run_news(
                 query=request.query,
-                time_window=request.time_window,
-                language=request.language,
-                max_results=request.max_results,
+                time_window=request.time_window or "7d",
+                language=request.language or "ko",
+                max_results=request.max_results or 20,
             )
+            result_dict = news_state.model_dump()
         elif request.agent == "viral_video_agent":
-            from src.agents.viral_video.graph import run_agent
+            from src.agents.viral_video.graph import run_agent as _run_viral
 
-            result = run_agent(
+            viral_state = _run_viral(
                 query=request.query,
-                time_window=request.time_window,
-                market=request.language.upper() if request.language else "KR",
+                time_window=request.time_window or "7d",
+                # viral agent uses `market` (ISO country code), not language
+                market=(request.language or "ko").upper()[:2],
             )
+            result_dict = viral_state.model_dump()
+        elif request.agent == "social_trend_agent":
+            from src.agents.social_trend.graph import run_agent as _run_social
+
+            social_state = _run_social(
+                query=request.query,
+                time_window=request.time_window or "7d",
+                language=request.language or "ko",
+            )
+            result_dict = social_state.model_dump()
         else:
             raise HTTPException(status_code=400, detail=f"Unknown agent: {request.agent}")
 
@@ -214,7 +227,7 @@ async def execute_agent(request: N8NAgentRequest, background_tasks: BackgroundTa
             task_id,
             {
                 "status": TaskStatus.COMPLETED.value,
-                "result": result,
+                "result": result_dict,
                 "updated_at": datetime.now().isoformat(),
                 "execution_time": execution_time,
                 "progress": 100,
@@ -223,10 +236,10 @@ async def execute_agent(request: N8NAgentRequest, background_tasks: BackgroundTa
 
         # 백그라운드 알림 전송
         if request.notify_slack:
-            background_tasks.add_task(send_slack_notification, result, request)
+            background_tasks.add_task(send_slack_notification, result_dict, request)
 
         if request.notify_webhook:
-            background_tasks.add_task(send_webhook_notification, result, request)
+            background_tasks.add_task(send_webhook_notification, result_dict, request)
 
         logger.info(
             f"[n8n] Agent execution completed: task_id={task_id}, time={execution_time:.2f}s"
@@ -237,7 +250,7 @@ async def execute_agent(request: N8NAgentRequest, background_tasks: BackgroundTa
             task_id=task_id,
             agent=request.agent,
             query=request.query,
-            result=result,
+            result=result_dict,
             execution_time=execution_time,
             timestamp=datetime.now().isoformat(),
         )

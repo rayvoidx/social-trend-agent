@@ -35,8 +35,13 @@
   },
   "env": {
     "NODE_ENV": "development",
-    "PYTEST_ARGS": "--cov=src --cov-report=term-missing"
+    "PYTEST_ARGS": "--cov=src --cov-report=term-missing",
+    "PYTHONPATH": ".",
+    "PYTHONDONTWRITEBYTECODE": "1",
+    "CLAUDE_PROJECT_DIR": ".",
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
   },
+  "teammateMode": "tmux",
   "hooks": {
     "Notification": [
       {
@@ -60,5 +65,20 @@
         ]
       }
     ]
+  },
+  "lsp": {
+    "python": {
+      "command": "pyright-langserver",
+      "args": ["--stdio"],
+      "initializationOptions": {
+        "python": {
+          "pythonPath": ".venv/bin/python"
+        }
+      }
+    },
+    "typescript": {
+      "command": "typescript-language-server",
+      "args": ["--stdio"]
+    }
   }
 }

@@ -148,9 +148,17 @@ class AgentLogger:
 
     def _log(self, level: int, message: str, **extra):
         """추가 필드와 함께 로그를 기록하는 내부 메서드"""
+        # exc_info, stack_info, stacklevel are reserved Logger.log() kwargs
+        # — extract them from extra so they don't collide with LogRecord fields
+        exc_info = extra.pop("exc_info", None)
+        stack_info = extra.pop("stack_info", False)
+        stacklevel = extra.pop("stacklevel", 1)
         extra["run_id"] = self.run_id
         extra["agent"] = self.agent_name
-        self.logger.log(level, message, extra=extra)
+        self.logger.log(
+            level, message, exc_info=exc_info, stack_info=stack_info,
+            stacklevel=stacklevel, extra=extra,
+        )
 
     def debug(self, message: str, **extra):
         """디버그 메시지 로깅"""
