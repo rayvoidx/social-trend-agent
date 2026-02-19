@@ -44,6 +44,10 @@
 
 ## Agentic Architecture
 
+<p align="center">
+  <img src="docs/architecture.svg" alt="Architecture Diagram" width="100%"/>
+</p>
+
 이 프로젝트는 최신 Agentic AI 아키텍처 패턴을 실제로 구현합니다.
 
 ### Multi-Agent System
@@ -416,14 +420,14 @@ scripts/                      # 유틸리티 스크립트
 
 ### 엔드포인트
 
-| 메소드   | 경로               | 설명                   |
+| 메소드 | 경로              | 설명                  |
 | ------ | ----------------- | --------------------- |
-| POST   | `/api/tasks`      | 분석 태스크 제출          |
-| GET    | `/api/tasks/{id}` | 태스크 상태/결과 조회      |
-| GET    | `/api/health`     | 헬스 체크               |
-| GET    | `/api/metrics`    | 현재 메트릭              |
-| GET    | `/api/statistics` | 집계 통계               |
-| WS     | `/ws/metrics`     | 실시간 메트릭 스트림       |
+| POST   | `/api/tasks`      | 분석 태스크 제출      |
+| GET    | `/api/tasks/{id}` | 태스크 상태/결과 조회 |
+| GET    | `/api/health`     | 헬스 체크             |
+| GET    | `/api/metrics`    | 현재 메트릭           |
+| GET    | `/api/statistics` | 집계 통계             |
+| WS     | `/ws/metrics`     | 실시간 메트릭 스트림  |
 
 ### 예시
 
@@ -548,18 +552,18 @@ rate_limit:
 | 변수                  | 필수   | 설명                                                 |
 | --------------------- | ------ | ---------------------------------------------------- |
 | `ENVIRONMENT`         | 선택   | 실행 환경 (development/staging/production)           |
-| `LLM_PROVIDER`        | 선택   | 기본 LLM 프로바이더 (openai/anthropic/google/ollama)  |
+| `LLM_PROVIDER`        | 선택   | 기본 LLM 프로바이더 (openai/anthropic/google/ollama) |
 | `OPENAI_API_KEY`      | 조건부 | OpenAI 사용 시 API 키                                |
 | `ANTHROPIC_API_KEY`   | 조건부 | Anthropic 사용 시 API 키                             |
 | `GOOGLE_API_KEY`      | 조건부 | Gemini 사용 시 API 키                                |
 | `SUPADATA_API_KEY`    | 권장   | MCP를 통한 SNS 데이터                                |
 | `SUPADATA_MCP_SERVER` | 선택   | MCP 서버 이름 (기본: supadata-ai-mcp)                |
 | `BRAVE_API_KEY`       | 권장   | 뉴스/웹 검색                                         |
-| `YOUTUBE_API_KEY`     | 선택   | YouTube Data API                                  |
-| `PINECONE_API_KEY`    | 선택   | Vector store                                      |
-| `DATABASE_URL`        | 선택   | PostgreSQL                                        |
-| `REDIS_URL`           | 선택   | Cache                                             |
-| `SLACK_WEBHOOK_URL`   | 선택   | Slack 알림                                         |
+| `YOUTUBE_API_KEY`     | 선택   | YouTube Data API                                     |
+| `PINECONE_API_KEY`    | 선택   | Vector store                                         |
+| `DATABASE_URL`        | 선택   | PostgreSQL                                           |
+| `REDIS_URL`           | 선택   | Cache                                                |
+| `SLACK_WEBHOOK_URL`   | 선택   | Slack 알림                                           |
 | `N8N_WEBHOOK_URL`     | 선택   | N8N 자동화 연동                                      |
 
 ## 기능
@@ -783,21 +787,21 @@ docker-compose up -d --scale api=3
 
 ## 기술 스택
 
-| 컴포넌트    | 기술                                                                             |
+| 컴포넌트    | 기술                                                                          |
 | ----------- | ----------------------------------------------------------------------------- |
-| 프레임워크  | FastAPI 0.115, LangGraph 0.2, Uvicorn                                            |
-| 언어        | Python 3.11+, TypeScript 5                                                     |
+| 프레임워크  | FastAPI 0.115, LangGraph 0.2, Uvicorn                                         |
+| 언어        | Python 3.11+, TypeScript 5                                                    |
 | LLM         | OpenAI GPT-5.2/o3, Anthropic Claude Sonnet 4.5, Google Gemini 2.5 Pro, Ollama |
-| 임베딩      | OpenAI text-embedding-3-large, Voyage AI voyage-3, Google embedding-001         |
+| 임베딩      | OpenAI text-embedding-3-large, Voyage AI voyage-3, Google embedding-001       |
 | Vector DB   | Pinecone                                                                      |
 | MCP         | Brave Search, Supadata                                                        |
-| 데이터 수집 | NewsAPI, YouTube API, Social Platform APIs                                       |
-| 캐시        | In-memory TTL, Redis                                                           |
-| 프론트엔드  | React 19, Vite, TailwindCSS                                                     |
-| 모니터링    | Prometheus, 구조화된 JSON 로깅                                                     |
+| 데이터 수집 | NewsAPI, YouTube API, Social Platform APIs                                    |
+| 캐시        | In-memory TTL, Redis                                                          |
+| 프론트엔드  | React 19, Vite, TailwindCSS                                                   |
+| 모니터링    | Prometheus, 구조화된 JSON 로깅                                                |
 | NLP         | NLTK, TextBlob, LangChain                                                     |
-| 컨테이너    | Docker, Docker Compose                                                          |
-| DB          | PostgreSQL (선택), Redis                                                       |
+| 컨테이너    | Docker, Docker Compose                                                        |
+| DB          | PostgreSQL (선택), Redis                                                      |
 
 ## 데이터 파이프라인
 
@@ -859,12 +863,12 @@ docker-compose up -d --scale api=3
 
 ### 캐싱 전략
 
-| 레이어    | 구현                      | TTL      | 용도                        |
+| 레이어    | 구현                      | TTL      | 용도                    |
 | --------- | ------------------------- | -------- | ----------------------- |
-| L1 메모리 | `SimpleCache` (`@cached`) | 1시간    | MCP 검색 결과 중복 방지        |
-| L2 Redis  | `AsyncRedisCache`         | 30~300초 | API 응답 캐시              |
-| n8n Redis | `RedisTaskStore`          | 24시간   | n8n 작업 상태 추적          |
-| Disk      | `DiskCache` (pickle)      | 24시간   | 대용량 결과 영속 저장         |
+| L1 메모리 | `SimpleCache` (`@cached`) | 1시간    | MCP 검색 결과 중복 방지 |
+| L2 Redis  | `AsyncRedisCache`         | 30~300초 | API 응답 캐시           |
+| n8n Redis | `RedisTaskStore`          | 24시간   | n8n 작업 상태 추적      |
+| Disk      | `DiskCache` (pickle)      | 24시간   | 대용량 결과 영속 저장   |
 
 ### MCP 데이터 게이트웨이
 

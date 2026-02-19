@@ -1,0 +1,362 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 620" font-family="'Segoe UI',system-ui,-apple-system,sans-serif">
+  <defs>
+    <radialGradient id="bgRad" cx="420" cy="300" r="520" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#1e293b"/><stop offset="100%" stop-color="#0f172a"/>
+    </radialGradient>
+    <linearGradient id="nodeGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#1e3a5f"/><stop offset="100%" stop-color="#0f2744"/>
+    </linearGradient>
+    <linearGradient id="activeGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#2563eb"/><stop offset="100%" stop-color="#1d4ed8"/>
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="2" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="shadow">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#000" flood-opacity="0.3"/>
+    </filter>
+  </defs>
+
+  <style>
+    .title { font-size: 18px; font-weight: 700; fill: #f8fafc; }
+    .subtitle { font-size: 10px; fill: #94a3b8; }
+    .nodeLabel { font-size: 9px; fill: #e2e8f0; font-weight: 600; }
+    .nodeSub { font-size: 7px; fill: #94a3b8; }
+    .nodeTiny { font-size: 6.5px; fill: #cbd5e1; font-weight: 500; }
+    .sectionLabel { font-size: 10px; fill: #475569; font-weight: 600; letter-spacing: 1.5px; }
+    .agentBadge { font-size: 9px; fill: #f8fafc; font-weight: 700; }
+    .techLabel { font-size: 7.5px; fill: #475569; }
+    .hubLabel { font-size: 11px; fill: #f59e0b; font-weight: 700; }
+    .hubSub { font-size: 8px; fill: #fbbf24; }
+    @keyframes pulse { 0%,100%{opacity:.4} 50%{opacity:1} }
+    .pulse { animation: pulse 2s ease-in-out infinite; }
+  </style>
+
+  <!-- Background -->
+  <rect width="1000" height="620" fill="url(#bgRad)" rx="12"/>
+  <g opacity="0.08">
+    <line x1="0" y1="150" x2="1000" y2="150" stroke="#475569" stroke-width="0.5"/>
+    <line x1="0" y1="300" x2="1000" y2="300" stroke="#475569" stroke-width="0.5"/>
+    <line x1="0" y1="450" x2="1000" y2="450" stroke="#475569" stroke-width="0.5"/>
+    <line x1="250" y1="0" x2="250" y2="620" stroke="#475569" stroke-width="0.5"/>
+    <line x1="500" y1="0" x2="500" y2="620" stroke="#475569" stroke-width="0.5"/>
+    <line x1="750" y1="0" x2="750" y2="620" stroke="#475569" stroke-width="0.5"/>
+  </g>
+
+  <!-- Title -->
+  <text x="500" y="32" text-anchor="middle" class="title">Social Trend Agent Architecture</text>
+  <text x="500" y="48" text-anchor="middle" class="subtitle">LangGraph Multi-Agent System with Real-Time SSE Streaming</text>
+
+  <!-- ════════════════════════════════════════════════ -->
+  <!-- LEFT: Infrastructure -->
+  <!-- ════════════════════════════════════════════════ -->
+  <text x="30" y="248" class="sectionLabel">INFRA</text>
+
+  <!-- Infra connector lines (visual only, gap-only between boxes) -->
+  <!-- User(42..98) → React(143..207) → FastAPI(254..326) → Orch ring(365) -->
+  <line x1="98" y1="290" x2="143" y2="290" stroke="#60a5fa" stroke-width="1.3" stroke-dasharray="2 4" opacity="0.5"/>
+  <line x1="207" y1="290" x2="254" y2="290" stroke="#60a5fa" stroke-width="1.3" stroke-dasharray="2 4" opacity="0.5"/>
+  <text x="230" y="285" text-anchor="middle" font-size="6" fill="#60a5fa" font-weight="600">SSE</text>
+  <line x1="326" y1="290" x2="365" y2="290" stroke="#60a5fa" stroke-width="1.3" stroke-dasharray="2 4" opacity="0.5"/>
+  <line x1="365" y1="310" x2="326" y2="310" stroke="#34d399" stroke-width="1.3" stroke-dasharray="2 4" opacity="0.4"/>
+  <line x1="254" y1="310" x2="207" y2="310" stroke="#34d399" stroke-width="1.3" stroke-dasharray="2 4" opacity="0.4"/>
+  <line x1="143" y1="310" x2="98" y2="310" stroke="#34d399" stroke-width="1.3" stroke-dasharray="2 4" opacity="0.4"/>
+
+  <!-- Continuous infra animation paths (single segments, no M breaks) -->
+  <path id="infraReqA" d="M98,290 L143,290" stroke="none" fill="none"/>
+  <path id="infraReqB" d="M207,290 L254,290" stroke="none" fill="none"/>
+  <path id="infraReqC" d="M326,290 L365,290" stroke="none" fill="none"/>
+  <path id="infraResA" d="M365,310 L326,310" stroke="none" fill="none"/>
+  <path id="infraResB" d="M254,310 L207,310" stroke="none" fill="none"/>
+  <path id="infraResC" d="M143,310 L98,310" stroke="none" fill="none"/>
+
+  <!-- User -->
+  <g transform="translate(70,300)">
+    <rect x="-28" y="-22" width="56" height="44" rx="10" fill="#334155" filter="url(#shadow)"/>
+    <text x="0" y="-4" text-anchor="middle" font-size="16">&#x1F464;</text>
+    <text x="0" y="12" text-anchor="middle" class="nodeSub">User</text>
+  </g>
+
+  <!-- React -->
+  <g transform="translate(175,300)">
+    <rect x="-32" y="-22" width="64" height="44" rx="8" fill="#1e3a5f" stroke="#3b82f6" stroke-width="1" filter="url(#shadow)"/>
+    <text x="0" y="-5" text-anchor="middle" class="nodeLabel">React 19</text>
+    <text x="0" y="7" text-anchor="middle" class="nodeSub">:5173</text>
+  </g>
+
+  <!-- FastAPI -->
+  <g transform="translate(290,300)">
+    <rect x="-36" y="-22" width="72" height="44" rx="8" fill="url(#activeGrad)" stroke="#60a5fa" stroke-width="1.5" filter="url(#shadow)">
+      <animate attributeName="stroke-opacity" values=".5;1;.5" dur="2s" repeatCount="indefinite"/>
+    </rect>
+    <text x="0" y="-5" text-anchor="middle" class="nodeLabel">FastAPI</text>
+    <text x="0" y="7" text-anchor="middle" class="nodeSub">:8000</text>
+  </g>
+
+  <!-- ════════════════════════════════════════════════ -->
+  <!-- CENTER HUB: Orchestrator -->
+  <!-- ════════════════════════════════════════════════ -->
+  <g transform="translate(420,300)">
+    <circle r="56" fill="none" stroke="#f59e0b" stroke-width="1.5" stroke-dasharray="8 4" opacity="0.3">
+      <animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="30s" repeatCount="indefinite"/>
+    </circle>
+    <circle r="50" fill="#1e293b" stroke="#f59e0b" stroke-width="1.2" opacity="0.9" filter="url(#shadow)"/>
+    <text x="0" y="-18" text-anchor="middle" font-size="14">&#x2699;</text>
+    <text x="0" y="-2" text-anchor="middle" class="hubLabel">Orchestrator</text>
+    <text x="0" y="12" text-anchor="middle" class="hubSub">3-Gear Router</text>
+    <text x="0" y="24" text-anchor="middle" class="hubSub">+ Planner</text>
+  </g>
+
+  <!-- ════════════════════════════════════════════════ -->
+  <!-- FAN-OUT / RETURN TRACKS -->
+  <!-- ════════════════════════════════════════════════ -->
+  <!-- Pod 1 (News): fan-out from Orch to pod, return stays within y=96-210 -->
+  <path id="trackOut1" d="M468,270 Q530,195 572,150" stroke="#7c3aed" stroke-width="1.5" stroke-dasharray="2 5" fill="none" opacity="0.5"/>
+  <path id="trackRet1" d="M900,170 Q910,100 850,96 Q700,96 550,115 Q490,140 460,260" stroke="#7c3aed" stroke-width="1.2" stroke-dasharray="2 5" fill="none" opacity="0.3"/>
+
+  <!-- Pod 2 (Video): fan-out horizontal, return curves below pod staying y=248-350 -->
+  <path id="trackOut2" d="M472,300 L572,300" stroke="#db2777" stroke-width="1.5" stroke-dasharray="2 5" fill="none" opacity="0.5"/>
+  <path id="trackRet2" d="M900,322 Q910,350 860,350 Q700,348 550,340 Q490,330 460,310" stroke="#db2777" stroke-width="1.2" stroke-dasharray="2 5" fill="none" opacity="0.3"/>
+
+  <!-- Pod 3 (Social): fan-out to pod, return stays within y=398-560 -->
+  <path id="trackOut3" d="M468,330 Q530,405 572,450" stroke="#0891b2" stroke-width="1.5" stroke-dasharray="2 5" fill="none" opacity="0.5"/>
+  <path id="trackRet3" d="M900,472 Q910,500 860,500 Q700,498 550,480 Q490,460 460,340" stroke="#0891b2" stroke-width="1.2" stroke-dasharray="2 5" fill="none" opacity="0.3"/>
+
+  <!-- ════════════════════════════════════════════════ -->
+  <!-- AGENT POD 1: News Trend (purple) — upper right -->
+  <!-- Pod origin: (580,108). Row1 local y=22, Row2 local y=50 -->
+  <!-- ════════════════════════════════════════════════ -->
+  <g transform="translate(580,108)">
+    <rect x="-8" y="-12" width="330" height="90" rx="10" fill="#7c3aed" opacity="0.05" stroke="#7c3aed" stroke-width="0.5" stroke-dasharray="4 4"/>
+    <rect x="0" y="-8" width="110" height="20" rx="5" fill="#7c3aed" opacity="0.85" filter="url(#shadow)"/>
+    <text x="55" y="6" text-anchor="middle" class="agentBadge">&#x1F4F0; News Trend</text>
+
+    <g transform="translate(4,22)">
+      <rect x="0" y="-9" width="56" height="18" rx="4" fill="url(#nodeGrad)" stroke="#7c3aed" stroke-width="0.8"/>
+      <text x="28" y="3" text-anchor="middle" class="nodeTiny">Router</text>
+      <rect x="66" y="-9" width="56" height="18" rx="4" fill="url(#nodeGrad)" stroke="#7c3aed" stroke-width="0.8"/>
+      <text x="94" y="3" text-anchor="middle" class="nodeTiny">Collect</text>
+      <rect x="132" y="-9" width="56" height="18" rx="4" fill="url(#nodeGrad)" stroke="#7c3aed" stroke-width="0.8"/>
+      <text x="160" y="3" text-anchor="middle" class="nodeTiny">Plan</text>
+      <rect x="198" y="-9" width="56" height="18" rx="4" fill="url(#nodeGrad)" stroke="#7c3aed" stroke-width="0.8"/>
+      <text x="226" y="3" text-anchor="middle" class="nodeTiny">Normalize</text>
+      <rect x="264" y="-9" width="50" height="18" rx="4" fill="url(#nodeGrad)" stroke="#7c3aed" stroke-width="0.8"/>
+      <text x="289" y="3" text-anchor="middle" class="nodeTiny">Analyze</text>
+    </g>
+    <g transform="translate(70,50)">
+      <rect x="132" y="-9" width="56" height="18" rx="4" fill="url(#nodeGrad)" stroke="#7c3aed" stroke-width="0.8"/>
+      <text x="160" y="3" text-anchor="middle" class="nodeTiny">Summarize</text>
+      <rect x="66" y="-9" width="56" height="18" rx="4" fill="url(#nodeGrad)" stroke="#7c3aed" stroke-width="0.8"/>
+      <text x="94" y="3" text-anchor="middle" class="nodeTiny">Critic</text>
+      <rect x="0" y="-9" width="56" height="18" rx="4" fill="url(#nodeGrad)" stroke="#7c3aed" stroke-width="0.8"/>
+      <text x="28" y="3" text-anchor="middle" class="nodeTiny">Report</text>
+    </g>
+    <g transform="translate(4,50)">
+      <rect x="0" y="-9" width="56" height="18" rx="4" fill="url(#nodeGrad)" stroke="#7c3aed" stroke-width="0.8"/>
+      <text x="28" y="3" text-anchor="middle" class="nodeTiny">Notify</text>
+    </g>
+
+    <!-- Gap-only connector lines (visual) -->
+    <line x1="60" y1="22" x2="70" y2="22" stroke="#7c3aed" stroke-width="1.3" stroke-dasharray="2 4" opacity="0.5"/>
+    <line x1="126" y1="22" x2="136" y2="22" stroke="#7c3aed" stroke-width="1.3" stroke-dasharray="2 4" opacity="0.5"/>
+    <line x1="192" y1="22" x2="202" y2="22" stroke="#7c3aed" stroke-width="1.3" stroke-dasharray="2 4" opacity="0.5"/>
+    <line x1="258" y1="22" x2="268" y2="22" stroke="#7c3aed" stroke-width="1.3" stroke-dasharray="2 4" opacity="0.5"/>
+    <path d="M318,22 L324,22 L324,50 L258,50" stroke="#7c3aed" stroke-width="1.3" stroke-dasharray="2 4" fill="none" opacity="0.5"/>
+    <line x1="202" y1="50" x2="192" y2="50" stroke="#7c3aed" stroke-width="1.3" stroke-dasharray="2 4" opacity="0.5"/>
+    <line x1="136" y1="50" x2="126" y2="50" stroke="#7c3aed" stroke-width="1.3" stroke-dasharray="2 4" opacity="0.5"/>
+    <line x1="70" y1="50" x2="60" y2="50" stroke="#7c3aed" stroke-width="1.3" stroke-dasharray="2 4" opacity="0.5"/>
+  </g>
+
+  <!-- ════════════════════════════════════════════════ -->
+  <!-- AGENT POD 2: Viral Video (pink) — middle right -->
+  <!-- ════════════════════════════════════════════════ -->
+  <g transform="translate(580,260)">
+    <rect x="-8" y="-12" width="330" height="90" rx="10" fill="#db2777" opacity="0.05" stroke="#db2777" stroke-width="0.5" stroke-dasharray="4 4"/>
+    <rect x="0" y="-8" width="115" height="20" rx="5" fill="#db2777" opacity="0.85" filter="url(#shadow)"/>
+    <text x="57" y="6" text-anchor="middle" class="agentBadge">&#x1F3AC; Viral Video</text>
+
+    <g transform="translate(4,22)">
+      <rect x="0" y="-9" width="56" height="18" rx="4" fill="url(#nodeGrad)" stroke="#db2777" stroke-width="0.8"/>
+      <text x="28" y="3" text-anchor="middle" class="nodeTiny">Router</text>
+      <rect x="66" y="-9" width="56" height="18" rx="4" fill="url(#nodeGrad)" stroke="#db2777" stroke-width="0.8"/>
+      <text x="94" y="3" text-anchor="middle" class="nodeTiny">Collect</text>
+      <rect x="132" y="-9" width="56" height="18" rx="4" fill="url(#nodeGrad)" stroke="#db2777" stroke-width="0.8"/>
+      <text x="160" y="3" text-anchor="middle" class="nodeTiny">Plan</text>
+      <rect x="198" y="-9" width="56" height="18" rx="4" fill="url(#nodeGrad)" stroke="#db2777" stroke-width="0.8"/>
+      <text x="226" y="3" text-anchor="middle" class="nodeTiny">Normalize</text>
+      <rect x="264" y="-9" width="50" height="18" rx="4" fill="url(#nodeGrad)" stroke="#db2777" stroke-width="0.8"/>
+      <text x="289" y="3" text-anchor="middle" class="nodeTiny">Analyze</text>
+    </g>
+    <g transform="translate(70,50)">
+      <rect x="132" y="-9" width="56" height="18" rx="4" fill="url(#nodeGrad)" stroke="#db2777" stroke-width="0.8"/>
+      <text x="160" y="3" text-anchor="middle" class="nodeTiny">Summarize</text>
+      <rect x="66" y="-9" width="56" height="18" rx="4" fill="url(#nodeGrad)" stroke="#db2777" stroke-width="0.8"/>
+      <text x="94" y="3" text-anchor="middle" class="nodeTiny">Critic</text>
+      <rect x="0" y="-9" width="56" height="18" rx="4" fill="url(#nodeGrad)" stroke="#db2777" stroke-width="0.8"/>
+      <text x="28" y="3" text-anchor="middle" class="nodeTiny">Report</text>
+    </g>
+    <g transform="translate(4,50)">
+      <rect x="0" y="-9" width="56" height="18" rx="4" fill="url(#nodeGrad)" stroke="#db2777" stroke-width="0.8"/>
+      <text x="28" y="3" text-anchor="middle" class="nodeTiny">Notify</text>
+    </g>
+
+    <line x1="60" y1="22" x2="70" y2="22" stroke="#db2777" stroke-width="1.3" stroke-dasharray="2 4" opacity="0.5"/>
+    <line x1="126" y1="22" x2="136" y2="22" stroke="#db2777" stroke-width="1.3" stroke-dasharray="2 4" opacity="0.5"/>
+    <line x1="192" y1="22" x2="202" y2="22" stroke="#db2777" stroke-width="1.3" stroke-dasharray="2 4" opacity="0.5"/>
+    <line x1="258" y1="22" x2="268" y2="22" stroke="#db2777" stroke-width="1.3" stroke-dasharray="2 4" opacity="0.5"/>
+    <path d="M318,22 L324,22 L324,50 L258,50" stroke="#db2777" stroke-width="1.3" stroke-dasharray="2 4" fill="none" opacity="0.5"/>
+    <line x1="202" y1="50" x2="192" y2="50" stroke="#db2777" stroke-width="1.3" stroke-dasharray="2 4" opacity="0.5"/>
+    <line x1="136" y1="50" x2="126" y2="50" stroke="#db2777" stroke-width="1.3" stroke-dasharray="2 4" opacity="0.5"/>
+    <line x1="70" y1="50" x2="60" y2="50" stroke="#db2777" stroke-width="1.3" stroke-dasharray="2 4" opacity="0.5"/>
+  </g>
+
+  <!-- ════════════════════════════════════════════════ -->
+  <!-- AGENT POD 3: Social Trend (cyan) — lower right -->
+  <!-- ════════════════════════════════════════════════ -->
+  <g transform="translate(580,410)">
+    <rect x="-8" y="-12" width="330" height="90" rx="10" fill="#0891b2" opacity="0.05" stroke="#0891b2" stroke-width="0.5" stroke-dasharray="4 4"/>
+    <rect x="0" y="-8" width="118" height="20" rx="5" fill="#0891b2" opacity="0.85" filter="url(#shadow)"/>
+    <text x="59" y="6" text-anchor="middle" class="agentBadge">&#x1F4CA; Social Trend</text>
+
+    <g transform="translate(4,22)">
+      <rect x="0" y="-9" width="56" height="18" rx="4" fill="url(#nodeGrad)" stroke="#0891b2" stroke-width="0.8"/>
+      <text x="28" y="3" text-anchor="middle" class="nodeTiny">Router</text>
+      <rect x="66" y="-9" width="56" height="18" rx="4" fill="url(#nodeGrad)" stroke="#0891b2" stroke-width="0.8"/>
+      <text x="94" y="3" text-anchor="middle" class="nodeTiny">Collect</text>
+      <rect x="132" y="-9" width="56" height="18" rx="4" fill="url(#nodeGrad)" stroke="#0891b2" stroke-width="0.8"/>
+      <text x="160" y="3" text-anchor="middle" class="nodeTiny">Plan</text>
+      <rect x="198" y="-9" width="56" height="18" rx="4" fill="url(#nodeGrad)" stroke="#0891b2" stroke-width="0.8"/>
+      <text x="226" y="3" text-anchor="middle" class="nodeTiny">Normalize</text>
+      <rect x="264" y="-9" width="50" height="18" rx="4" fill="url(#nodeGrad)" stroke="#0891b2" stroke-width="0.8"/>
+      <text x="289" y="3" text-anchor="middle" class="nodeTiny">Analyze</text>
+    </g>
+    <g transform="translate(70,50)">
+      <rect x="132" y="-9" width="56" height="18" rx="4" fill="url(#nodeGrad)" stroke="#0891b2" stroke-width="0.8"/>
+      <text x="160" y="3" text-anchor="middle" class="nodeTiny">Summarize</text>
+      <rect x="66" y="-9" width="56" height="18" rx="4" fill="url(#nodeGrad)" stroke="#0891b2" stroke-width="0.8"/>
+      <text x="94" y="3" text-anchor="middle" class="nodeTiny">Critic</text>
+      <rect x="0" y="-9" width="56" height="18" rx="4" fill="url(#nodeGrad)" stroke="#0891b2" stroke-width="0.8"/>
+      <text x="28" y="3" text-anchor="middle" class="nodeTiny">Report</text>
+    </g>
+    <g transform="translate(4,50)">
+      <rect x="0" y="-9" width="56" height="18" rx="4" fill="url(#nodeGrad)" stroke="#0891b2" stroke-width="0.8"/>
+      <text x="28" y="3" text-anchor="middle" class="nodeTiny">Notify</text>
+    </g>
+
+    <line x1="60" y1="22" x2="70" y2="22" stroke="#0891b2" stroke-width="1.3" stroke-dasharray="2 4" opacity="0.5"/>
+    <line x1="126" y1="22" x2="136" y2="22" stroke="#0891b2" stroke-width="1.3" stroke-dasharray="2 4" opacity="0.5"/>
+    <line x1="192" y1="22" x2="202" y2="22" stroke="#0891b2" stroke-width="1.3" stroke-dasharray="2 4" opacity="0.5"/>
+    <line x1="258" y1="22" x2="268" y2="22" stroke="#0891b2" stroke-width="1.3" stroke-dasharray="2 4" opacity="0.5"/>
+    <path d="M318,22 L324,22 L324,50 L258,50" stroke="#0891b2" stroke-width="1.3" stroke-dasharray="2 4" fill="none" opacity="0.5"/>
+    <line x1="202" y1="50" x2="192" y2="50" stroke="#0891b2" stroke-width="1.3" stroke-dasharray="2 4" opacity="0.5"/>
+    <line x1="136" y1="50" x2="126" y2="50" stroke="#0891b2" stroke-width="1.3" stroke-dasharray="2 4" opacity="0.5"/>
+    <line x1="70" y1="50" x2="60" y2="50" stroke="#0891b2" stroke-width="1.3" stroke-dasharray="2 4" opacity="0.5"/>
+  </g>
+
+  <!-- ════════════════════════════════════════════════ -->
+  <!-- SIDE SERVICES -->
+  <!-- ════════════════════════════════════════════════ -->
+  <g transform="translate(160,520)">
+    <rect x="-36" y="-14" width="72" height="28" rx="6" fill="#1e3a5f" stroke="#ef4444" stroke-width="0.8" filter="url(#shadow)"/>
+    <text x="0" y="-1" text-anchor="middle" class="nodeLabel">Redis</text>
+    <text x="0" y="9" text-anchor="middle" class="nodeSub">:6380 Cache</text>
+  </g>
+  <path id="trackRedis" d="M185,506 Q250,430 290,322" stroke="#ef4444" stroke-width="0.8" stroke-dasharray="2 5" fill="none" opacity="0.25"/>
+
+  <g transform="translate(340,520)">
+    <rect x="-44" y="-14" width="88" height="28" rx="6" fill="#1e3a5f" stroke="#f97316" stroke-width="0.8" filter="url(#shadow)"/>
+    <text x="0" y="-1" text-anchor="middle" class="nodeLabel">Prometheus</text>
+    <text x="0" y="9" text-anchor="middle" class="nodeSub">:9091</text>
+  </g>
+  <path id="trackProm" d="M360,506 Q400,440 420,352" stroke="#f97316" stroke-width="0.8" stroke-dasharray="2 5" fill="none" opacity="0.25"/>
+
+  <g transform="translate(520,520)">
+    <rect x="-48" y="-14" width="96" height="28" rx="6" fill="#1e3a5f" stroke="#10b981" stroke-width="0.8" filter="url(#shadow)"/>
+    <text x="0" y="-1" text-anchor="middle" class="nodeLabel">MCP Tools</text>
+    <text x="0" y="9" text-anchor="middle" class="nodeSub">Brave + Supadata</text>
+  </g>
+  <path d="M545,506 Q600,460 620,420" stroke="#10b981" stroke-width="0.8" stroke-dasharray="2 5" fill="none" opacity="0.25"/>
+  <path id="trackMcp" d="M535,506 Q580,380 595,310" stroke="#10b981" stroke-width="0.8" stroke-dasharray="2 5" fill="none" opacity="0.25"/>
+  <path d="M525,506 Q560,300 580,165" stroke="#10b981" stroke-width="0.8" stroke-dasharray="2 5" fill="none" opacity="0.25"/>
+
+  <!-- ════════════════════════════════════════════════ -->
+  <!-- ANIMATED DOTS — uniform visual speed (~55px/s) -->
+  <!-- Durations based on path length for consistent speed -->
+  <!-- Infra ~45px=0.8s, FanOut ~150px=2.8s, Return ~500px=9s, Service ~200px=3.5s -->
+  <!-- ════════════════════════════════════════════════ -->
+
+  <!-- Infra request: 3 separate segment dots (blue, gap-only) -->
+  <circle r="2.5" fill="#60a5fa" filter="url(#glow)" opacity="0.9">
+    <animateMotion dur="0.8s" repeatCount="indefinite"><mpath href="#infraReqA"/></animateMotion>
+  </circle>
+  <circle r="2.5" fill="#60a5fa" filter="url(#glow)" opacity="0.9">
+    <animateMotion dur="0.8s" repeatCount="indefinite" begin="0.3s"><mpath href="#infraReqB"/></animateMotion>
+  </circle>
+  <circle r="2.5" fill="#60a5fa" filter="url(#glow)" opacity="0.9">
+    <animateMotion dur="0.8s" repeatCount="indefinite" begin="0.6s"><mpath href="#infraReqC"/></animateMotion>
+  </circle>
+
+  <!-- Infra response: 3 separate segment dots (green, gap-only) -->
+  <circle r="2.5" fill="#34d399" filter="url(#glow)" opacity="0.85">
+    <animateMotion dur="0.8s" repeatCount="indefinite" begin="0.2s"><mpath href="#infraResA"/></animateMotion>
+  </circle>
+  <circle r="2.5" fill="#34d399" filter="url(#glow)" opacity="0.85">
+    <animateMotion dur="0.8s" repeatCount="indefinite" begin="0.5s"><mpath href="#infraResB"/></animateMotion>
+  </circle>
+  <circle r="2.5" fill="#34d399" filter="url(#glow)" opacity="0.85">
+    <animateMotion dur="0.8s" repeatCount="indefinite" begin="0.8s"><mpath href="#infraResC"/></animateMotion>
+  </circle>
+
+  <!-- Fan-out: Orch → Agents (amber, ~150px paths) -->
+  <circle r="2.5" fill="#f59e0b" filter="url(#glow)" opacity="0.9">
+    <animateMotion dur="2.8s" repeatCount="indefinite" begin="0s"><mpath href="#trackOut1"/></animateMotion>
+  </circle>
+  <circle r="2.5" fill="#f59e0b" filter="url(#glow)" opacity="0.9">
+    <animateMotion dur="2s" repeatCount="indefinite" begin="0.5s"><mpath href="#trackOut2"/></animateMotion>
+  </circle>
+  <circle r="2.5" fill="#f59e0b" filter="url(#glow)" opacity="0.9">
+    <animateMotion dur="2.8s" repeatCount="indefinite" begin="1s"><mpath href="#trackOut3"/></animateMotion>
+  </circle>
+
+  <!-- Return: Agent → Orchestrator (~480px arc paths) -->
+  <circle r="2.5" fill="#a78bfa" filter="url(#glow)" opacity="0.8">
+    <animateMotion dur="8s" repeatCount="indefinite" begin="1.5s"><mpath href="#trackRet1"/></animateMotion>
+  </circle>
+  <circle r="2.5" fill="#f472b6" filter="url(#glow)" opacity="0.8">
+    <animateMotion dur="8s" repeatCount="indefinite" begin="3s"><mpath href="#trackRet2"/></animateMotion>
+  </circle>
+  <circle r="2.5" fill="#22d3ee" filter="url(#glow)" opacity="0.8">
+    <animateMotion dur="8s" repeatCount="indefinite" begin="4.5s"><mpath href="#trackRet3"/></animateMotion>
+  </circle>
+
+  <!-- Redis → FastAPI (red dot, ~200px) -->
+  <circle r="2" fill="#ef4444" filter="url(#glow)" opacity="0.7">
+    <animateMotion dur="3.5s" repeatCount="indefinite" begin="0s"><mpath href="#trackRedis"/></animateMotion>
+  </circle>
+
+  <!-- Prometheus → Orchestrator (orange dot, ~180px) -->
+  <circle r="2" fill="#f97316" filter="url(#glow)" opacity="0.7">
+    <animateMotion dur="3.5s" repeatCount="indefinite" begin="1s"><mpath href="#trackProm"/></animateMotion>
+  </circle>
+
+  <!-- MCP Tools → Agent Pods (green dot, ~200px) -->
+  <circle r="2" fill="#10b981" filter="url(#glow)" opacity="0.7">
+    <animateMotion dur="3.5s" repeatCount="indefinite" begin="2s"><mpath href="#trackMcp"/></animateMotion>
+  </circle>
+
+  <!-- ════════════════════════════════════════════════ -->
+  <!-- LABELS & LEGEND -->
+  <!-- ════════════════════════════════════════════════ -->
+  <g transform="translate(30,590)">
+    <text x="0" y="0" class="techLabel">PIPELINE: Router → Collect → Plan → Normalize → Analyze → Summarize → Critic → Report → Notify</text>
+    <text x="560" y="0" class="techLabel">TECH: Python 3.11 | LangGraph 0.2 | FastAPI 0.115 | React 19 | Redis | Docker</text>
+  </g>
+  <text x="600" y="80" class="sectionLabel">AGENT PIPELINES</text>
+
+  <!-- LIVE indicator -->
+  <g transform="translate(940,32)">
+    <circle r="3.5" fill="#34d399" class="pulse"/>
+    <text x="9" y="4" font-size="8" fill="#34d399" font-weight="600">LIVE</text>
+  </g>
+</svg>
