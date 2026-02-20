@@ -140,3 +140,6 @@ src/artifacts/**/*
 # Logs directory: keep placeholder only
 !logs/
 !logs/.gitkeep
+
+# Generated reports (local only)
+PORTFOLIO_REPORT.md

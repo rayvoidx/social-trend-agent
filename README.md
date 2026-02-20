@@ -34,7 +34,7 @@ _Autonomous AI agents that collect, analyze, and report on trends across news, v
 ---
 
 > [!NOTE]
-> **Proof of Concept** — This project demonstrates multi-agent AI architecture for trend intelligence. The core agent engine and orchestration patterns are functional. This PoC validates the technical approach before building toward a full creator-facing platform. See the [Product Vision](#product-vision) and [Roadmap](#roadmap) for where this is heading.
+> **Proof of Concept (Archived)** — This repository is the **completed PoC** for Social Trend Agent. It validates multi-agent AI architecture for trend intelligence — orchestration, planning, MCP tools, and compound AI pipelines are all functional. **Further development continues in a separate repository** as the project transitions from PoC to a production service. This repo remains as a reference implementation.
 
 > [!TIP]
 > **Language** — This repository is maintained in English. Localization (Korean, Japanese, Portuguese, etc.) will be added when the product transitions to a public service. See [Localization](#localization).
@@ -749,7 +749,7 @@ artifacts/                        # Generated reports
 
 ## Roadmap
 
-### PoC v0.3 — Current
+### PoC v0.3 — Complete (This Repository)
 
 - [x] Multi-agent orchestration with 3-Gear Router
 - [x] LangGraph 9-node pipeline per agent
@@ -761,8 +761,12 @@ artifacts/                        # Generated reports
 - [x] React 19 dashboard with monitoring
 - [x] Docker Compose full-stack deployment
 - [x] Prometheus metrics + structured logging
+- [x] CI/CD with coverage measurement
+- [x] Unit + integration test suite (137 tests)
 
-### PoC v0.4 — Hardening
+> **This repository is complete as a PoC.** The items below are planned for the production repository.
+
+### Next: Hardening (Separate Repository)
 
 - [ ] PostgreSQL persistent storage (replace in-memory repositories)
 - [ ] User authentication (bcrypt + JWT + email verification)
@@ -795,25 +799,27 @@ artifacts/                        # Generated reports
 
 ## PoC Status
 
-> This table reflects the current state as a **Proof of Concept**. Items marked "PoC Complete" demonstrate the pattern works; they are not production-hardened.
+> This table reflects the final state of the PoC. Items marked "PoC Complete" demonstrate the pattern works; they are not production-hardened. Production development continues in a separate repository.
 
-| Component                    |      Status      | Notes                                   |
-| :--------------------------- | :--------------: | :-------------------------------------- |
-| Agent Orchestration (3-Gear) | **PoC Complete** | Routing, planning, multi-agent dispatch |
-| News Trend Agent             | **PoC Complete** | Full 9-node LangGraph pipeline          |
-| Viral Video Agent            | **PoC Complete** | Z-score spike detection                 |
-| Social Trend Agent           | **PoC Complete** | Multi-platform collection               |
-| SSE Streaming                | **PoC Complete** | Real-time node-level progress           |
-| FastAPI + React Dashboard    | **PoC Complete** | Functional UI, not creator-facing       |
-| Docker Compose               | **PoC Complete** | Multi-stage builds + health checks      |
-| Agentic RAG                  | **PoC Complete** | Pinecone hybrid search                  |
-| Self-Refinement Engine       | **PoC Complete** | Quality scoring loop                    |
-| Prometheus Monitoring        | **PoC Complete** | Metrics collection                      |
-| Data Persistence             | **Not Started**  | Currently in-memory only                |
-| User Auth / Multi-tenancy    | **Not Started**  | Stub only                               |
-| Creator Onboarding           | **Not Started**  | Planned for Service v1                  |
-| Billing / Payments           | **Not Started**  | Planned for Service v1                  |
-| i18n / Localization          | **Not Started**  | Planned for Service v1                  |
+| Component                    |      Status      | Notes                                         |
+| :--------------------------- | :--------------: | :-------------------------------------------- |
+| Agent Orchestration (3-Gear) | **PoC Complete** | Routing, planning, multi-agent dispatch       |
+| News Trend Agent             | **PoC Complete** | Full 9-node LangGraph pipeline                |
+| Viral Video Agent            | **PoC Complete** | Z-score spike detection                       |
+| Social Trend Agent           | **PoC Complete** | Multi-platform collection                     |
+| SSE Streaming                | **PoC Complete** | Real-time node-level progress                 |
+| FastAPI + React Dashboard    | **PoC Complete** | Functional UI, not creator-facing             |
+| Docker Compose               | **PoC Complete** | Multi-stage builds + health checks            |
+| Agentic RAG                  | **PoC Complete** | Pinecone hybrid search                        |
+| Self-Refinement Engine       | **PoC Complete** | Quality scoring loop                          |
+| Prometheus Monitoring        | **PoC Complete** | Metrics collection                            |
+| CI/CD Pipeline               | **PoC Complete** | GitHub Actions with coverage                  |
+| Test Suite                   | **PoC Complete** | 137 tests (unit + integration), 30%+ coverage |
+| Data Persistence             |  **Next Phase**  | Currently in-memory only                      |
+| User Auth / Multi-tenancy    |  **Next Phase**  | Stub only                                     |
+| Creator Onboarding           |  **Next Phase**  | Planned for Service v1                        |
+| Billing / Payments           |  **Next Phase**  | Planned for Service v1                        |
+| i18n / Localization          |  **Next Phase**  | Planned for Service v1                        |
 
 ---
 
@@ -860,7 +866,7 @@ BSD-3-Clause — see [LICENSE](./LICENSE) for details.
 **Built with LangGraph, FastAPI, and React**
 
 This PoC demonstrates that multi-agent AI can deliver actionable trend intelligence.
-The next step is building it into a platform creators actually use.
+Production development continues in a separate repository.
 
 [![Star History](https://img.shields.io/github/stars/rayvoidx/social-trend-agent?style=social)](https://github.com/rayvoidx/social-trend-agent)
 

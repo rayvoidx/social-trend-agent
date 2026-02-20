@@ -39,8 +39,8 @@ def validate_environment():
     # Load .env file
     env_file = project_root / ".env"
     if not env_file.exists():
-        logger.warning("⚠️  .env file not found. Creating from .env.template...")
-        env_template = project_root / "env.template"
+        logger.warning("⚠️  .env file not found. Creating from .env.example...")
+        env_template = project_root / ".env.example"
         if env_template.exists():
             import shutil
 
@@ -49,7 +49,7 @@ def validate_environment():
             logger.info(f"📝 Edit: {env_file}")
             return False
         else:
-            logger.error("❌ env.template not found. Cannot create .env file.")
+            logger.error("❌ .env.example not found. Cannot create .env file.")
             return False
 
     load_dotenv(env_file, override=True)
@@ -322,12 +322,12 @@ def run_web_stack() -> None:
         processes.append(subprocess.Popen(api_cmd, cwd=str(project_root)))
         logger.info("✅ Started Python API on http://localhost:8000")
 
-        # 2) Node TypeScript API
-        node_api_dir = project_root / "apps" / "node"
-        if node_api_dir.exists():
-            node_cmd = ["sh", "-c", "npm install && npm run dev"]
-            processes.append(subprocess.Popen(node_cmd, cwd=str(node_api_dir)))
-            logger.info("✅ Started Node API on http://localhost:3001")
+        # 2) Node TypeScript API (legacy, not used in current architecture)
+        # node_api_dir = project_root / "apps" / "node"
+        # if node_api_dir.exists():
+        #     node_cmd = ["sh", "-c", "npm install && npm run dev"]
+        #     processes.append(subprocess.Popen(node_cmd, cwd=str(node_api_dir)))
+        #     logger.info("✅ Started Node API on http://localhost:3001")
 
         # 3) Frontend (Vite)
         frontend_dir = project_root / "apps" / "web"
