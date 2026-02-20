@@ -2,13 +2,15 @@
 
 # Social Trend Agent
 
-### Production-Ready Multi-Agent System for Real-Time Trend Intelligence
+### Multi-Agent Trend Intelligence System — Proof of Concept
 
 _Autonomous AI agents that collect, analyze, and report on trends across news, video, and social media — powered by LangGraph orchestration, MCP tool protocol, and compound AI pipelines._
 
+**Exploring how multi-agent AI can power the next generation of creator analytics.**
+
 <br/>
 
-[![Beta](https://img.shields.io/badge/Status-Beta-yellow?style=for-the-badge)]()
+[![PoC](https://img.shields.io/badge/Status-Proof%20of%20Concept-orange?style=for-the-badge)]()
 [![Python 3.11+](https://img.shields.io/badge/Python-3.11+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![LangGraph](https://img.shields.io/badge/LangGraph-0.2+-FF6F00?style=for-the-badge)](https://langchain-ai.github.io/langgraph/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
@@ -32,7 +34,10 @@ _Autonomous AI agents that collect, analyze, and report on trends across news, v
 ---
 
 > [!NOTE]
-> **Beta Release** — Core analysis engine and agent workflows are functional. APIs may evolve between releases. We welcome early adopters and contributors. See the [Roadmap](#roadmap) for planned features.
+> **Proof of Concept** — This project demonstrates multi-agent AI architecture for trend intelligence. The core agent engine and orchestration patterns are functional. This PoC validates the technical approach before building toward a full creator-facing platform. See the [Product Vision](#product-vision) and [Roadmap](#roadmap) for where this is heading.
+
+> [!TIP]
+> **Language** — This repository is maintained in English. Localization (Korean, Japanese, Portuguese, etc.) will be added when the product transitions to a public service. See [Localization](#localization).
 
 ---
 
@@ -84,6 +89,49 @@ Query → Orchestrator → Plan → Execute
 | **Tools**         | MCP Protocol (Brave Search, Supadata) + 10+ tools        | Standardized tool access via JSON-RPC 2.0           |
 | **Feedback**      | Self-Refinement loop with quality scoring                | Reports improve until they meet quality thresholds  |
 | **Multi-Agent**   | News + Video + Social agents with shared LangGraph state | Specialized expertise with coordinated output       |
+
+---
+
+## Product Vision
+
+This PoC validates the core AI engine. The long-term product is a **creator-facing trend intelligence platform** — a SaaS tool that tells creators what to make next, before it trends.
+
+```
+ PoC (Current)                          Service (Target)
+ ─────────────                          ────────────────
+ Agent engine + API + Dashboard    →    Creator onboarding + Platform OAuth
+ In-memory data + Redis cache      →    PostgreSQL + persistent storage
+ Single-user CLI/web               →    Multi-tenant SaaS with billing
+ English-only                      →    i18n (EN → KO → JA → PT-BR → ...)
+ Trend analysis reports            →    Personalized content briefs
+ Manual query input                →    Scheduled monitoring + push alerts
+```
+
+### Target Users
+
+| Segment                                   | Use Case                                                              | Phase      |
+| :---------------------------------------- | :-------------------------------------------------------------------- | :--------- |
+| **Creators** (YouTube, TikTok, Instagram) | "What should I make next?" — predictive trend alerts + content briefs | Service v1 |
+| **MCN / Agencies**                        | Multi-creator management, campaign matching, performance tracking     | Service v2 |
+| **Brands**                                | Creator discovery, trend-aligned campaign planning                    | Service v3 |
+
+### Planned Creator Features (Service Phase)
+
+- **Platform OAuth onboarding** — Connect YouTube, TikTok, Instagram accounts for real metrics
+- **Personalized trend feed** — AI agents learn each creator's niche and surface relevant trends
+- **Content brief generator** — From trend signal to actionable title/angle/format suggestions
+- **Creator-brand matching** — Insight → Mission → Creator pipeline with real performance data
+- **Leaderboard & challenges** — Entertainment elements to drive engagement and retention
+- **Real-time push alerts** — "This topic is spiking in your niche — act now"
+
+### What This PoC Validates
+
+| Question                                                | PoC Demonstrates                                                        |
+| :------------------------------------------------------ | :---------------------------------------------------------------------- |
+| Can multi-agent orchestration work for trend analysis?  | 3-Gear Router + 3 specialized agents + LangGraph pipelines              |
+| Can we collect data across platforms in real-time?      | MCP protocol with Brave Search + Supadata (YouTube, TikTok, X)          |
+| Can AI produce actionable insights, not just summaries? | Self-refinement engine with quality scoring (factuality, actionability) |
+| Can this run as a web service?                          | FastAPI + React + SSE streaming + Docker Compose                        |
 
 ---
 
@@ -701,7 +749,7 @@ artifacts/                        # Generated reports
 
 ## Roadmap
 
-### v0.3 — Current (Beta)
+### PoC v0.3 — Current
 
 - [x] Multi-agent orchestration with 3-Gear Router
 - [x] LangGraph 9-node pipeline per agent
@@ -714,43 +762,76 @@ artifacts/                        # Generated reports
 - [x] Docker Compose full-stack deployment
 - [x] Prometheus metrics + structured logging
 
-### v0.4 — Next (Planned)
+### PoC v0.4 — Hardening
 
-- [ ] Grafana dashboard integration
-- [ ] Kubernetes deployment manifests
-- [ ] Webhook-based real-time alerts
-- [ ] Custom agent plugin architecture
-- [ ] Multi-language report generation
-- [ ] Advanced visualization in dashboard (charts, timelines)
-
-### v1.0 — Stable (Target)
-
-- [ ] Enterprise SSO / RBAC authentication
-- [ ] Horizontal auto-scaling with load balancing
-- [ ] PostgreSQL persistent storage migration
+- [ ] PostgreSQL persistent storage (replace in-memory repositories)
+- [ ] User authentication (bcrypt + JWT + email verification)
+- [ ] Multi-tenant data isolation
 - [ ] 80%+ test coverage
-- [ ] Comprehensive API documentation
+- [ ] Grafana dashboard integration
+
+### Service v1.0 — Creator Platform (Target)
+
+- [ ] Creator onboarding flow (YouTube / TikTok / Instagram OAuth)
+- [ ] Real creator metrics sync (subscribers, engagement, performance)
+- [ ] Personalized trend feed per creator niche
+- [ ] Content brief generator (trend → title/angle/format suggestions)
+- [ ] Stripe billing integration (Free / Creator / Pro / Agency tiers)
+- [ ] Push notifications for trend alerts
+- [ ] Multi-language support (EN → KO → JA → PT-BR)
+- [ ] Leaderboard & trend challenges (entertainment layer)
+
+### Service v2.0 — Scale
+
+- [ ] Creator-brand matching with ML-based scoring
+- [ ] MCN / agency multi-creator management
+- [ ] Kubernetes auto-scaling
 - [ ] Agent marketplace for community-built agents
 - [ ] Scheduled recurring analyses (cron-based)
+- [ ] API access for third-party integrations
 - [ ] White-label dashboard theming
 
 ---
 
-## Feature Readiness
+## PoC Status
 
-| Component             |   Status   | Notes                        |
-| :-------------------- | :--------: | :--------------------------- |
-| News Trend Agent      | **Stable** | Production-ready pipeline    |
-| Viral Video Agent     | **Stable** | Z-score spike detection      |
-| Social Trend Agent    | **Stable** | Multi-platform monitoring    |
-| Orchestrator (3-Gear) | **Stable** | Routing + planning           |
-| FastAPI Server        | **Stable** | Full REST + SSE              |
-| React Dashboard       |  **Beta**  | Core features complete       |
-| Docker Deployment     | **Stable** | Multi-stage + health checks  |
-| SSE Streaming         |  **Beta**  | Node-level progress tracking |
-| Prometheus Monitoring |  **Beta**  | Metrics collection active    |
-| Agentic RAG           |  **Beta**  | Pinecone integration         |
-| Human-in-the-Loop     | **Alpha**  | Checkpoint-based approval    |
+> This table reflects the current state as a **Proof of Concept**. Items marked "PoC Complete" demonstrate the pattern works; they are not production-hardened.
+
+| Component                    |      Status      | Notes                                   |
+| :--------------------------- | :--------------: | :-------------------------------------- |
+| Agent Orchestration (3-Gear) | **PoC Complete** | Routing, planning, multi-agent dispatch |
+| News Trend Agent             | **PoC Complete** | Full 9-node LangGraph pipeline          |
+| Viral Video Agent            | **PoC Complete** | Z-score spike detection                 |
+| Social Trend Agent           | **PoC Complete** | Multi-platform collection               |
+| SSE Streaming                | **PoC Complete** | Real-time node-level progress           |
+| FastAPI + React Dashboard    | **PoC Complete** | Functional UI, not creator-facing       |
+| Docker Compose               | **PoC Complete** | Multi-stage builds + health checks      |
+| Agentic RAG                  | **PoC Complete** | Pinecone hybrid search                  |
+| Self-Refinement Engine       | **PoC Complete** | Quality scoring loop                    |
+| Prometheus Monitoring        | **PoC Complete** | Metrics collection                      |
+| Data Persistence             | **Not Started**  | Currently in-memory only                |
+| User Auth / Multi-tenancy    | **Not Started**  | Stub only                               |
+| Creator Onboarding           | **Not Started**  | Planned for Service v1                  |
+| Billing / Payments           | **Not Started**  | Planned for Service v1                  |
+| i18n / Localization          | **Not Started**  | Planned for Service v1                  |
+
+---
+
+## Localization
+
+This repository is maintained in **English** as the primary language for the open-source PoC.
+
+When the project transitions to a public service, localization will be rolled out in phases:
+
+| Phase        | Languages                                | Scope                                            |
+| :----------- | :--------------------------------------- | :----------------------------------------------- |
+| Service v1.0 | **English** (default)                    | Full UI + reports + API responses                |
+| Service v1.1 | **Korean** (ko)                          | UI + trend sources (Naver, KakaoTV) + reports    |
+| Service v1.2 | **Japanese** (ja)                        | UI + trend sources (LINE, Yahoo Japan) + reports |
+| Service v2.0 | **Portuguese** (pt-BR), **Spanish** (es) | LATAM expansion                                  |
+| Service v2.x | **Hindi** (hi), **Indonesian** (id)      | Asia-Pacific growth markets                      |
+
+Localization includes not just UI translation but **local trend source integration** — each language adds region-specific data pipelines (e.g., Naver for Korean, LINE News for Japanese).
 
 ---
 
@@ -778,7 +859,8 @@ BSD-3-Clause — see [LICENSE](./LICENSE) for details.
 
 **Built with LangGraph, FastAPI, and React**
 
-If you find this project useful, please consider giving it a star.
+This PoC demonstrates that multi-agent AI can deliver actionable trend intelligence.
+The next step is building it into a platform creators actually use.
 
 [![Star History](https://img.shields.io/github/stars/rayvoidx/social-trend-agent?style=social)](https://github.com/rayvoidx/social-trend-agent)
 
